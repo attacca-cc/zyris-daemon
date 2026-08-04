@@ -21,11 +21,15 @@ pub const BLOB_MAX: usize = 8 << 20;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op")]
 pub enum Request {
-    /// Actively checks whether a display really exists and whether input works.
+    /// Checks whether capture and input **actually work**.
     ///
     /// Why we don't defer to capkit's backend selection: `ScreenBackend::detect()`
     /// returns Xcap with no probe at all when `WAYLAND_DISPLAY` is unset, and on some compositors
     /// it panics.
+    ///
+    /// Enumerating displays is not enough either — GNOME reports `wl_output` just fine while
+    /// never implementing `zwlr_screencopy`, so enumeration succeeds and every capture fails.
+    /// So the probe really does attempt one small capture.
     Probe,
     ListDisplays,
     Screenshot {
@@ -69,7 +73,9 @@ pub struct ImageMeta {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum Response {
-    Probe { displays: Vec<Display>, input_ok: bool },
+    /// Keeping `screen_ok` and `input_ok` separate is the point. Displays that enumerate but
+    /// refuse to capture are real (GNOME), so the parent reads both and picks what to announce.
+    Probe { displays: Vec<Display>, screen_ok: bool, input_ok: bool },
     Displays { displays: Vec<Display> },
     Image { meta: ImageMeta },
     Ok,
@@ -206,11 +212,14 @@ mod tests {
     fn capability_types_cross_the_wire_unchanged() {
         let mut buf = Vec::new();
         let displays = vec![a_display()];
-        write_frame(&mut buf, 1, &Response::Probe { displays: displays.clone(), input_ok: true }, &[])
-            .unwrap();
+        let probe =
+            Response::Probe { displays: displays.clone(), screen_ok: false, input_ok: true };
+        write_frame(&mut buf, 1, &probe, &[]).unwrap();
         match serde_json::from_value(read_frame(&mut buf.as_slice()).unwrap().body).unwrap() {
-            Response::Probe { displays: back, input_ok } => {
+            // Enumerates fine but captures not at all: that combination (GNOME) is real.
+            Response::Probe { displays: back, screen_ok, input_ok } => {
                 assert_eq!(back, displays);
+                assert!(!screen_ok);
                 assert!(input_ok);
             }
             other => panic!("{other:?}"),

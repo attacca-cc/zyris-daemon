@@ -138,6 +138,21 @@ pub async fn run(cfg: Config) -> Exit {
 
     tracing::info!(node = %cfg.node.name, url = %cfg.node.server_url, "Starting zyrisd");
     publish_state(&cfg.node.name, false, &caps);
+
+    // Third branch: watches the desktop child. Rewrites the state file as the announce set changes.
+    let watcher = tokio::spawn({
+        let caps = caps.clone();
+        let desktop = cfg.desktop.clone();
+        let name = cfg.node.name.clone();
+        let for_change = caps.clone();
+        async move {
+            crate::display::watch(caps, desktop, move || {
+                publish_state(&name, true, &for_change)
+            })
+            .await
+        }
+    });
+
     let running = tokio::spawn(runner.try_run());
 
     let outcome = tokio::select! {
@@ -164,6 +179,10 @@ pub async fn run(cfg: Config) -> Exit {
             Exit::Ok
         }
     };
+
+    // Stop the watch task. The child exits itself once the parent's stdin closes, so nothing is
+    // orphaned; and if something is, the unit's cgroup reaps it within TimeoutStopSec.
+    watcher.abort();
 
     if outcome == Exit::NeedsOperator && cfg.notify.enabled {
         crate::notify::needs_attention(

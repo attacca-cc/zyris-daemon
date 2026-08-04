@@ -6,6 +6,7 @@
 
 pub mod config;
 pub mod credentials;
+pub mod display;
 pub mod file_io;
 pub mod gate;
 pub mod notify;

@@ -129,13 +129,17 @@ pub fn install() -> anyhow::Result<()> {
     // `start` is a no-op on an active unit; if it changed, only restart runs the new binary.
     systemctl(&[if changed { "restart" } else { "start" }, "zyrisd.service"])?;
 
-    report_liveness();
+    if !report_liveness() {
+        // The unit exists but the daemon didn't come up. Scripts need to tell those apart —
+        // the usual cause is that `zyrisd enroll` hasn't been run yet.
+        anyhow::bail!("Installed the service, but the daemon did not come up");
+    }
     Ok(())
 }
 
 /// With `Type=simple`, `start` returns success right after fork. Check it is actually alive
 /// so that "installed" isn't a lie.
-fn report_liveness() {
+fn report_liveness() -> bool {
     for _ in 0..12 {
         std::thread::sleep(std::time::Duration::from_millis(300));
         let active = Command::new("systemctl")
@@ -146,15 +150,17 @@ fn report_liveness() {
         match active.as_deref() {
             Some("active") => {
                 println!("zyrisd is running. It will connect automatically on every boot.");
-                return;
+                return true;
             }
             Some("failed") => break,
             _ => continue,
         }
     }
     eprintln!("zyrisd did not come up. Check that enrollment finished:");
+    eprintln!("  zyrisd enroll        if you have not enrolled yet");
     eprintln!("  zyrisd status");
     eprintln!("  journalctl --user -u zyrisd -n 30");
+    false
 }
 
 pub fn uninstall(purge: bool) -> anyhow::Result<()> {
@@ -164,6 +170,9 @@ pub fn uninstall(purge: bool) -> anyhow::Result<()> {
         std::fs::remove_file(unit_path())?;
     }
     let _ = systemctl(&["daemon-reload"]);
+    // Deleting the unit file leaves the failed state in systemd's memory. Then even after
+    // removal, `systemctl --user status` shows a unit that no longer exists as failed.
+    let _ = systemctl(&["reset-failed", "zyrisd.service"]);
 
     let user = std::env::var("USER").unwrap_or_default();
     if !user.is_empty() {

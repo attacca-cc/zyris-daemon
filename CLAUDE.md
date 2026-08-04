@@ -59,6 +59,10 @@ bindgen and wayland-scanner, which makes it especially heavy.
 - **Credential and config paths are literal `$HOME`.** The idiomatic `XDG_CONFIG_HOME` lookup
   breaks: the systemd user manager has no such variable, so `enroll` (login shell) and `run` (the unit)
   can end up reading different files.
+- **Do not trust `ScreenBackend::detect()`.** All it checks is that `WayshotConnection::new()` opens
+  and that `wl_output` is not empty. GNOME satisfies both while never implementing the
+  `zwlr_screencopy` that capture needs. The child actually tries a capture on each backend and
+  remembers the one that works (`capture_works` in `display/src/main.rs`).
 - When bumping upstream `zyris`, `./scripts/check-zyris-pin.sh` has to pass.
 
 ## Commands

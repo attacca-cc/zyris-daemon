@@ -392,9 +392,18 @@ is `Clone`, so moving it into the task costs nothing.
 **Use only `add`/`remove`; never hand `replace()` a new instance.** Those two clone the existing `Arc` and
 rebuild, so `PtyTerminal` is never dropped.
 
-Detection is not left to capkit's backend choice. With no `WAYLAND_DISPLAY`, `ScreenBackend::detect()`
-**returns Xcap without probing anything**, and it panics on some compositors. The probe must be active, and
-must run inside the child so a panic cannot kill the daemon — the second reason for splitting it out.
+Detection is not left to capkit's backend choice. In a Wayland session `ScreenBackend::detect()` only
+checks that `WayshotConnection::new()` opens and `wl_output` is non-empty. **GNOME satisfies both while
+never implementing the `zwlr_screencopy` that capture needs**, so the Wayland backend is picked and every
+capture fails with `Cannot find required wayland protocol` — a combination actually observed on this
+machine.
+
+So the probe **takes a small real capture with each backend and remembers the one that works.** Order:
+whatever `detect()` chose first, then the rest. On GNOME/KDE, xcap reaches the screenshot portal and wins
+(measured: Wayland fails → Xcap succeeds).
+
+All of this must happen inside the child process. Enumeration panics on some compositors, and that must
+not be allowed to kill the daemon — the second reason for splitting the child out.
 
 ### Protocol
 
@@ -612,7 +621,7 @@ here.**
 | **cargo-deb output** (`Depends`/`Recommends`/postinst) | cargo-deb not installed | install it, `cargo deb --no-build` → `ar x` and read control.tar |
 | dash compatibility | `/bin/sh` is a bash symlink | `sh install.sh` in `debian:bookworm-slim` |
 | glibc compat of the shipped binary · `libc6` floor | 2.44 here → 2.36 on bookworm | release build in an old-glibc container (CI) |
-| desktop capture actually working | GNOME has no `zwlr_screencopy` | a sway/wlroots or X11 session |
+| ~~desktop capture actually working~~ | **verified** — on GNOME the Wayland backend fails and Xcap fallback works | — |
 | **display detection and notify on the boot (linger) path** | needs a reboot and graphical login | reboot for real, read the journal |
 | detection on other desktops | one machine does not generalize | run `Probe` on KDE/sway/X11 |
 | **`DT_NEEDED` of the parent binary being empty** | no artifact yet | `readelf -d target/release/zyrisd` |

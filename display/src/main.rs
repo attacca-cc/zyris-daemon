@@ -88,9 +88,38 @@ async fn handle(req: Request) -> (Response, Vec<u8>) {
     }
 }
 
-fn screen() -> zyris_capkit::HostScreenCapture {
+/// The backend proven to actually capture. Once found it sticks for the life of this process.
+static BACKEND: std::sync::OnceLock<zyris_capkit::ScreenBackend> = std::sync::OnceLock::new();
+
+/// Backends to try, starting with whatever `detect()` picked.
+///
+/// **Do not trust `detect()`.** It only checks that `WayshotConnection::new()` opens and
+/// that `wl_output` is non-empty. GNOME satisfies both while implementing none of the
+/// `zwlr_screencopy` capture needs. So the Wayland backend gets picked and every capture
+/// fails with "Cannot find required wayland protocol" — observed on this machine.
+/// xcap reaches the GNOME/KDE screenshot portal, so that is the answer.
+#[cfg(target_os = "linux")]
+fn backend_candidates() -> Vec<zyris_capkit::ScreenBackend> {
+    use zyris_capkit::ScreenBackend;
+    let first = ScreenBackend::detect();
+    let mut all = vec![first];
+    all.extend([ScreenBackend::Wayland, ScreenBackend::Xcap].into_iter().filter(|b| *b != first));
+    all
+}
+
+#[cfg(not(target_os = "linux"))]
+fn backend_candidates() -> Vec<zyris_capkit::ScreenBackend> {
+    vec![zyris_capkit::ScreenBackend::detect()]
+}
+
+fn screen_with(backend: zyris_capkit::ScreenBackend) -> zyris_capkit::HostScreenCapture {
     // Keep the upstream downscale budget. Without it a 4K capture will not fit the response.
-    zyris_capkit::HostScreenCapture::default()
+    zyris_capkit::HostScreenCapture::default().with_backend(backend)
+}
+
+/// Capturer built on the proven backend. Before one is proven, start with `detect()`'s pick.
+fn screen() -> zyris_capkit::HostScreenCapture {
+    screen_with(*BACKEND.get().unwrap_or(&backend_candidates()[0]))
 }
 
 /// Splits a `Datum::Image` into metadata and bytes.
@@ -151,19 +180,27 @@ fn input_works() -> bool {
     std::panic::catch_unwind(|| make_input().is_ok()).unwrap_or(false)
 }
 
-/// **Takes one tiny real capture.**
+/// **Takes a tiny real capture with each backend and remembers the one that works.**
 ///
-/// Enumerating displays alone is not enough, as seen on this machine — GNOME reports `wl_output`
-/// fine but implements no `zwlr_screencopy`, so enumeration succeeds while every capture
-/// fails with "Cannot find required wayland protocol".
-///
-/// Minimum width keeps the probe cheap. Only success counts; the image is dropped.
+/// Enumerating displays is not enough, and neither is `detect()` — see the `backend_candidates`
+/// comment above. Minimum width keeps the probe cheap; only success counts, the image is dropped.
 async fn capture_works() -> bool {
-    match screen().screenshot(None, None, Some(zyris_caps::ImageFormat::Jpeg), Some(64)).await {
-        Ok(_) => true,
-        Err(e) => {
-            tracing::info!(error = %e, "Capture does not work, so screen_capture is not announced");
-            false
+    if BACKEND.get().is_some() {
+        return true;
+    }
+    for backend in backend_candidates() {
+        match screen_with(backend)
+            .screenshot(None, None, Some(zyris_caps::ImageFormat::Jpeg), Some(64))
+            .await
+        {
+            Ok(_) => {
+                tracing::info!(?backend, "Screen capture works with this backend");
+                let _ = BACKEND.set(backend);
+                return true;
+            }
+            Err(e) => tracing::info!(?backend, error = %e, "Capture fails with this backend"),
         }
     }
+    tracing::info!("No backend can capture, so screen_capture is not announced");
+    false
 }

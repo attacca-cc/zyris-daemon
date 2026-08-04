@@ -5,3 +5,4 @@
 //! paths and resources, SIGTERM and exit codes, and the desktop child's lifetime.
 
 pub mod config;
+pub mod credentials;

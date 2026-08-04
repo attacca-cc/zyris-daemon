@@ -119,6 +119,17 @@ fn spawn_child(path: &PathBuf) -> std::io::Result<(Child, oneshot::Receiver<()>)
     let (tx, mut rx) = mpsc::channel::<Job>(1);
     let (dead_tx, dead_rx) = oneshot::channel();
 
+    // A separate thread reaps the child.
+    //
+    // The framing thread below sits in `blocking_recv` until a job arrives, so on its own it
+    // would not notice a dead child until the next call. Meanwhile the capabilities of a dead
+    // helper stay announced — exactly the state this design exists to avoid.
+    // It really did end up stuck that way in live.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        let _ = dead_tx.send(());
+    });
+
     std::thread::spawn(move || {
         let seq = AtomicU64::new(1);
         while let Some(job) = rx.blocking_recv() {
@@ -142,10 +153,8 @@ fn spawn_child(path: &PathBuf) -> std::io::Result<(Child, oneshot::Receiver<()>)
         while let Ok(job) = rx.try_recv() {
             let _ = job.reply.send(Err("Desktop helper has exited".into()));
         }
+        // If framing broke, end the child too. Reaping is the other thread's job.
         kill(pid);
-        // Reap the zombie.
-        let _ = child.wait();
-        let _ = dead_tx.send(());
     });
 
     Ok((Child { tx, pid }, dead_rx))

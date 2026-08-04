@@ -85,15 +85,27 @@ pub fn restart_if_installed() {
     }
 }
 
-/// Finds the desktop helper. `PATH` is not a candidate — same reason as `zyrisd-node::display`.
+/// Finds the desktop helper path to bake into the unit. `PATH` is not a candidate —
+/// same reason as `zyrisd-node::display::helper_path`.
+///
+/// **An already-set `$ZYRISD_DISPLAY_BIN` wins.** Otherwise, in layouts where the child is not
+/// in its conventional place — a dev tree — the desktop works in the foreground and silently
+/// drops out under the service. That has already happened once.
 fn display_helper_beside(exec: &Path) -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("ZYRISD_DISPLAY_BIN").map(PathBuf::from) {
+        if p.exists() {
+            return p.canonicalize().ok().or(Some(p));
+        }
+    }
     let parent = exec.parent()?;
-    let candidates = [
+    [
         parent.join("../libexec/zyrisd-display"),
         parent.join("zyrisd-display"),
         PathBuf::from("/usr/libexec/zyrisd-display"),
-    ];
-    candidates.into_iter().find(|p| p.exists()).and_then(|p| p.canonicalize().ok())
+    ]
+    .into_iter()
+    .find(|p| p.exists())
+    .and_then(|p| p.canonicalize().ok())
 }
 
 pub fn install() -> anyhow::Result<()> {

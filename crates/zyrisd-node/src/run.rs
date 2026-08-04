@@ -47,6 +47,21 @@ fn classify_refused(credential_gave_up: bool) -> Exit {
     }
 }
 
+/// Records the current announce set so `zyrisd status` can read it.
+///
+/// The set shifts at runtime as the desktop child comes and goes — config alone can't tell you.
+fn publish_state(node_name: &str, connected: bool, caps: &zyris::Capabilities) {
+    crate::state::write(&crate::state::State {
+        node_name: node_name.to_string(),
+        connected,
+        capabilities: caps.descriptors().iter().map(|d| d.name.clone()).collect(),
+        updated_unix: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0),
+    });
+}
+
 /// Where the live connection is handed to the signal handler.
 #[derive(Clone, Default)]
 pub struct ConnSlot(Arc<Mutex<Option<Connection>>>);
@@ -99,19 +114,30 @@ pub async fn run(cfg: Config) -> Exit {
         GatedTerminal::new(PathGate::new(roots.clone(), deny.clone()), cfg.terminal.clone());
     let files = GatedFileIo::new(PathGate::new(roots, deny));
 
-    let slot = ConnSlot::new();
-    let hook_slot = slot.clone();
     let runner = Runner::new(run_config, credentials.clone())
         .capability(TerminalServer(terminal))
-        .capability(FileIoServer(files))
+        .capability(FileIoServer(files));
+
+    // Grab this before the spawn. `capabilities()` takes `&self` and `Capabilities` is Clone (Arc
+    // inside), so moving it into the desktop watch task later still points at the same set.
+    let caps = runner.capabilities();
+
+    let slot = ConnSlot::new();
+    let hook_slot = slot.clone();
+    let runner = runner.on_connect({
         // If the slot fill lives in the returned future, a signal can land before it is scheduled.
         // Fill it synchronously in the closure **body** and hand back an empty future.
-        .on_connect(move |conn| {
+        let caps = caps.clone();
+        let name = cfg.node.name.clone();
+        move |conn| {
             hook_slot.put(conn);
+            publish_state(&name, true, &caps);
             std::future::ready(())
-        });
+        }
+    });
 
     tracing::info!(node = %cfg.node.name, url = %cfg.node.server_url, "Starting zyrisd");
+    publish_state(&cfg.node.name, false, &caps);
     let running = tokio::spawn(runner.try_run());
 
     let outcome = tokio::select! {

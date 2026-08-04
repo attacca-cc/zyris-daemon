@@ -18,7 +18,7 @@ pub enum ConfigError {
     NoHome,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub node: NodeConfig,
@@ -70,18 +70,6 @@ pub struct DesktopConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct NotifyConfig {
     pub enabled: bool,
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            node: NodeConfig::default(),
-            files: FilesConfig::default(),
-            terminal: TerminalConfig::default(),
-            desktop: DesktopConfig::default(),
-            notify: NotifyConfig::default(),
-        }
-    }
 }
 
 impl Default for NodeConfig {

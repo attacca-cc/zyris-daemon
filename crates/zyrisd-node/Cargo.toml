@@ -1,0 +1,25 @@
+[package]
+name = "zyrisd-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Node assembly for zyrisd — credentials, gating, lifecycle"
+
+[dependencies]
+zyrisd-display-proto.workspace = true
+bytes.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+zyris.workspace = true
+zyris-caps.workspace = true
+# Default features only (file-io, terminal). Only display/ turns on desktop.
+zyris-capkit.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -1,0 +1,26 @@
+[workspace]
+# Empty on purpose. This manifest becomes its own workspace root, fully detached from the
+# feature unification above. That makes it impossible for a single `cargo build --workspace`
+# to leak zyris-capkit's desktop feature into the parent binary.
+
+[package]
+name = "zyrisd-display"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "zyrisd desktop helper. The only binary that links graphics libraries"
+
+[[bin]]
+name = "zyrisd-display"
+path = "src/main.rs"
+
+[dependencies]
+zyrisd-display-proto = { path = "../crates/zyrisd-display-proto" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e", features = ["desktop", "input-wayland"] }

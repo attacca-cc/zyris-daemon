@@ -1,0 +1,11 @@
+[package]
+name = "zyrisd-display-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Framing and messages between the zyrisd parent and its desktop child"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+# Framing is synchronous std::io. The parent uses spawn_blocking, the child its main thread.

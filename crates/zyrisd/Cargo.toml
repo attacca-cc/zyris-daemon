@@ -19,3 +19,24 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zyris.workspace = true
+
+[package.metadata.deb]
+maintainer = "Attacca <minenaturecrew@gmail.com>"
+section = "utils"
+priority = "optional"
+# Leaving depends empty makes cargo-deb run dpkg-shlibdeps over **every** binary in the
+# package, pulling the child's (zyrisd-display) libwayland/libxcb/libgbm SONAMEs into Depends.
+# That defeats the point of splitting the child out: no graphics stack on a headless install.
+# The price is maintaining the libc floor by hand, and that is written up in spec §11.
+depends = "libc6 (>= 2.36)"
+recommends = "libwayland-client0, libxcb1, libxkbcommon0, libgbm1"
+maintainer-scripts = "../../packaging/deb"
+assets = [
+    ["../../target/release/zyrisd", "usr/bin/", "755"],
+    ["../../display/target/release/zyrisd-display", "usr/libexec/", "755"],
+    ["../../README.md", "usr/share/doc/zyrisd/README.md", "644"],
+]
+extended-description = """
+zyrisd keeps this machine connected to Attacca.
+After installing, run `zyrisd enroll` to register the machine, then `zyrisd install`.
+"""

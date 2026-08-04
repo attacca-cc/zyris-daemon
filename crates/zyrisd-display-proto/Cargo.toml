@@ -8,4 +8,8 @@ description = "Framing and messages between the zyrisd parent and its desktop ch
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+# Messages carry the capability's real types (Display, Region, ImageFormat, MouseButton) as-is.
+# Mirroring them into our own types only creates places for fields to drift, and zyris-caps is
+# declarations only, so this dependency drags in no graphics libraries.
+zyris-caps.workspace = true
 # Framing is synchronous std::io. The parent uses spawn_blocking, the child its main thread.

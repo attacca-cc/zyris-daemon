@@ -1,13 +1,18 @@
 //! Framing between the zyrisd parent and the desktop child.
 //!
 //! One frame = `[u32 BE json_len][json][u32 BE blob_len][blob]`.
-//! Screenshot bytes ride the blob frame, so there is no base64 bloat.
+//! Screenshot bytes ride the blob frame, so there is no base64 bloat — `Blob` serializes to
+//! base64 on the wire, so shipping a finished `Datum` as JSON would throw that saving away.
 //!
 //! **The child's stdout is frames only, logs go to stderr.** Mix them and the framing breaks.
+//!
+//! Messages carry the real `zyris-caps` types on purpose. Defining our own types and
+//! translating between them would only create a place for fields to drift.
 
 use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize};
+use zyris_caps::{Display, ImageFormat, MouseButton, Region};
 
 /// A u32 reaches 4 GiB, so without a cap one corrupt header makes us try to allocate that much.
 pub const JSON_MAX: usize = 1 << 20;
@@ -17,26 +22,31 @@ pub const BLOB_MAX: usize = 8 << 20;
 #[serde(tag = "op")]
 pub enum Request {
     /// Actively checks whether a display really exists and whether input works.
+    ///
+    /// Why we don't defer to capkit's backend selection: `ScreenBackend::detect()`
+    /// returns Xcap with no probe at all when `WAYLAND_DISPLAY` is unset, and on some compositors
+    /// it panics.
     Probe,
     ListDisplays,
     Screenshot {
-        display: Option<u32>,
+        display: Option<String>,
         region: Option<Region>,
-        format: Option<String>,
+        format: Option<ImageFormat>,
         max_width: Option<u32>,
     },
+    TypeText {
+        text: String,
+    },
+    Key {
+        chord: String,
+    },
     MoveTo {
+        display: String,
         x: i32,
         y: i32,
     },
     Click {
-        button: String,
-    },
-    Key {
-        key: String,
-    },
-    Type {
-        text: String,
+        button: MouseButton,
     },
     Scroll {
         dx: i32,
@@ -44,40 +54,23 @@ pub enum Request {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Region {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DisplayInfo {
-    pub id: u32,
-    pub name: String,
-    pub width: u32,
-    pub height: u32,
-}
-
-/// Why the screenshot response carries meta: the capability's return is not a raw blob but
-/// `Datum::Image{name, description, media_type, blob}`, and `description` is something only
-/// the child can compute — once it downscales to fit the budget, image and display coordinates
-/// diverge, and `description` is where that scale is recorded.
+/// The child sends meta only instead of a whole `Datum::Image`, the bytes go out in the blob frame.
+///
+/// Only the child can compute that meta — once it downscales to fit the budget, image coordinates
+/// no longer match display coordinates, and `description` is where that scale is recorded. Handed
+/// nothing but a raw blob, the parent has no way to know what to write there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageMeta {
-    pub resolved_display_id: u32,
-    pub sent_width: u32,
-    pub sent_height: u32,
+    pub name: String,
+    pub description: Option<String>,
     pub media_type: String,
-    pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum Response {
-    Probe { displays: Vec<DisplayInfo>, input_ok: bool },
-    Displays { displays: Vec<DisplayInfo> },
+    Probe { displays: Vec<Display>, input_ok: bool },
+    Displays { displays: Vec<Display> },
     Image { meta: ImageMeta },
     Ok,
     Error { message: String },
@@ -138,6 +131,19 @@ pub fn read_frame<R: Read>(r: &mut R) -> io::Result<Frame> {
 mod tests {
     use super::*;
 
+    fn a_display() -> Display {
+        Display {
+            id: "DP-1".into(),
+            name: "Built-in display".into(),
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale_factor: 1.0,
+            primary: true,
+        }
+    }
+
     #[test]
     fn a_frame_round_trips_with_a_blob() {
         let mut buf = Vec::new();
@@ -181,11 +187,9 @@ mod tests {
     #[test]
     fn an_image_response_carries_the_metadata_only_the_child_can_compute() {
         let meta = ImageMeta {
-            resolved_display_id: 1,
-            sent_width: 1920,
-            sent_height: 1080,
+            name: "DP-1.jpg".into(),
+            description: Some("Display DP-1 (3840x2160 scaled down 0.5x)".into()),
             media_type: "image/jpeg".into(),
-            description: "Display 1 (3840x2160 scaled down 0.5x)".into(),
         };
         let mut buf = Vec::new();
         write_frame(&mut buf, 3, &Response::Image { meta: meta.clone() }, b"jpegbytes").unwrap();
@@ -195,5 +199,33 @@ mod tests {
             other => panic!("{other:?}"),
         }
         assert_eq!(got.blob, b"jpegbytes");
+    }
+
+    /// The capability's real types cross unchanged — no translation layer, no place to drift.
+    #[test]
+    fn capability_types_cross_the_wire_unchanged() {
+        let mut buf = Vec::new();
+        let displays = vec![a_display()];
+        write_frame(&mut buf, 1, &Response::Probe { displays: displays.clone(), input_ok: true }, &[])
+            .unwrap();
+        match serde_json::from_value(read_frame(&mut buf.as_slice()).unwrap().body).unwrap() {
+            Response::Probe { displays: back, input_ok } => {
+                assert_eq!(back, displays);
+                assert!(input_ok);
+            }
+            other => panic!("{other:?}"),
+        }
+
+        let mut buf = Vec::new();
+        let req = Request::Screenshot {
+            display: Some("DP-1".into()),
+            region: Some(Region { x: 1, y: 2, width: 3, height: 4 }),
+            format: Some(ImageFormat::Jpeg),
+            max_width: Some(1280),
+        };
+        write_frame(&mut buf, 2, &req, &[]).unwrap();
+        let back: Request =
+            serde_json::from_value(read_frame(&mut buf.as_slice()).unwrap().body).unwrap();
+        assert_eq!(back, req);
     }
 }

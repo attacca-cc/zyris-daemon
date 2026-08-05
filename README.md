@@ -157,6 +157,10 @@ GitHub Actions does the release builds. Push a `v*` tag and `.github/workflows/r
 Linux (x86_64, aarch64) and Windows (x86_64), then uploads `install.sh`, `install.ps1`, tarball, `.deb`,
 and the `.exe` installer to GitHub Releases.
 
+The first release (v0.1.0) ships without the Linux desktop helper (`zyrisd-display`) — the zyris-side
+fix it needs (RemoteDesktop/libei token handling) isn't merged into `attacca-cc/zyris` yet.
+Once that merges and the pin moves up, it goes back into the tarball and the `.deb`.
+
 ## License
 
 Your choice of [MIT](LICENSE-MIT) or [Apache License 2.0](LICENSE-APACHE).

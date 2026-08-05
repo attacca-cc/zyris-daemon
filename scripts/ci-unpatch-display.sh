@@ -13,4 +13,11 @@ if grep -q '^\[patch\.' display/Cargo.toml; then
   echo "✗ failed to strip the [patch] section" >&2
   exit 1
 fi
-echo "✓ stripped [patch] from display/Cargo.toml (build re-resolves Cargo.lock to the git rev)"
+# Also drop the input-libei feature, which exists only in the patched tree — zyris-capkit at
+# the pinned rev has no such feature, and leaving it in breaks dependency resolution.
+sed -i 's/, *"input-libei"//; s/"input-libei", *//; s/"input-libei"//' display/Cargo.toml
+if grep -q 'input-libei' display/Cargo.toml; then
+  echo "✗ failed to strip the input-libei feature" >&2
+  exit 1
+fi
+echo "✓ stripped [patch] and input-libei from display/Cargo.toml (building at the pinned rev)"

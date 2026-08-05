@@ -6,6 +6,7 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "WordFunc.nsh"
+!include "StrFunc.nsh"
 !include "WinMessages.nsh"
 
 !define APPNAME "zyrisd"
@@ -53,8 +54,11 @@ Section "zyrisd (required)" SEC_MAIN
   ReadRegStr $0 HKCU "Environment" "Path"
   ${If} $0 == ""
     WriteRegExpandStr HKCU "Environment" "Path" "$INSTDIR"
-  ${ElseIfNot} $0 Contains "$INSTDIR"
-    WriteRegExpandStr HKCU "Environment" "Path" "$0;$INSTDIR"
+  ${Else}
+    ${StrStr} $1 $0 "$INSTDIR"
+    ${If} $1 == ""
+      WriteRegExpandStr HKCU "Environment" "Path" "$0;$INSTDIR"
+    ${EndIf}
   ${EndIf}
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 SectionEnd

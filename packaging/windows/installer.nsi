@@ -7,6 +7,7 @@ Unicode true
 !include "LogicLib.nsh"
 !include "WordFunc.nsh"
 !include "StrFunc.nsh"
+\${Using:StrFunc} StrStr
 !include "WinMessages.nsh"
 
 !define APPNAME "zyrisd"

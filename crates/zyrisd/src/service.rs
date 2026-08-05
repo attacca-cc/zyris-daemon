@@ -109,6 +109,14 @@ fn display_helper_beside(exec: &Path) -> Option<PathBuf> {
 }
 
 pub fn install() -> anyhow::Result<()> {
+    #[cfg(windows)]
+    {
+        anyhow::bail!(
+            "On Windows, install with the exe installer (zyrisd-setup). \
+             `zyrisd install` is Linux systemd only."
+        );
+    }
+    #[cfg(unix)]
     if unsafe { libc::geteuid() } == 0 {
         anyhow::bail!("Do not run zyrisd install as root. It is a user session service.");
     }

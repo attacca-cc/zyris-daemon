@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-linux:
+    name: check + test (linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: apt packages for building display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1-mesa-dev libgbm-dev libwayland-dev \
+            libxkbcommon-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libei-dev pkg-config
+
+      # display/'s dev [patch] points at paths CI doesn't have. Strip it, verify at the pinned rev.
+      - name: strip display [patch]
+        run: bash scripts/ci-unpatch-display.sh
+
+      - name: cargo check (workspace)
+        run: cargo check --workspace
+      - name: cargo check (display)
+        run: cargo check --manifest-path display/Cargo.toml
+      - name: cargo test (workspace)
+        run: cargo test --workspace
+      - name: check zyris pin
+        run: bash scripts/check-zyris-pin.sh
+
+  check-windows:
+    name: check (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # display/ is excluded from the workspace, so the workspace check never touches it.
+      - name: cargo check (workspace)
+        run: cargo check --workspace

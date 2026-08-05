@@ -32,6 +32,27 @@ A human has to approve enrollment, so "works the moment it installs" is impossib
 installer also started the service, the daemon would come up unenrolled and sit there failing, and
 with `Type=simple` the installer would print "done" without ever knowing.
 
+## Windows
+
+From PowerShell (native):
+
+```powershell
+irm https://github.com/attacca-cc/zyris-daemon/releases/latest/download/install.ps1 | iex
+```
+
+From Git Bash / MSYS2 / WSL2 (shell):
+
+```bash
+curl -fsSL https://github.com/attacca-cc/zyris-daemon/releases/latest/download/install.sh | sh
+```
+
+Or grab the installer from [releases](https://github.com/attacca-cc/zyris-daemon/releases) and run
+`zyrisd-setup-x86_64.exe`. Auto-connect at boot is an installer option, and the installer only drops
+the binary — enrollment is still done by hand afterwards, same as on Linux.
+
+Windows does not offer screen capture or input (`screen_capture`/`input`) yet. The capabilities
+it does offer are `terminal` and `file_io`.
+
 ## Commands
 
 | command | what |
@@ -131,6 +152,10 @@ cargo deb -p zyrisd --no-build     # target/debian/zyrisd_*.deb
 The `.deb` depends only on `libc6`; graphics libraries sit under `Recommends:`. The helper is a
 separate process precisely so headless installs don't drag in the graphics stack, so promoting it
 to `Depends:` here makes that split pointless.
+
+GitHub Actions does the release builds. Push a `v*` tag and `.github/workflows/release.yml` builds
+Linux (x86_64, aarch64) and Windows (x86_64), then uploads `install.sh`, `install.ps1`, tarball, `.deb`,
+and the `.exe` installer to GitHub Releases.
 
 ## License
 

@@ -39,9 +39,16 @@ pub fn session_env() -> Vec<(String, String)> {
 /// `XAUTHORITY` is not guessed — the session-scoped file can live anywhere. Without it, xcb
 /// finds it itself or just fails, and that failure is caught by the child probe (`capture_works`)
 /// which then skips the announce, so it stays quiet.
+#[cfg(unix)]
 fn fallback_environment() -> Vec<(String, String)> {
     let uid = unsafe { libc::geteuid() };
     fallback_from_dirs(&PathBuf::from(format!("/run/user/{uid}")), Path::new("/tmp/.X11-unix"))
+}
+
+/// Windows has no session socket dirs for this fallback to scan. Desktop notices are future work.
+#[cfg(not(unix))]
+fn fallback_environment() -> Vec<(String, String)> {
+    Vec::new()
 }
 
 /// The pure part, split out so tests can hand it socket directories directly.

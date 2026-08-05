@@ -1,0 +1,183 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-x86_64:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: display build deps (keep going on failure — display is optional)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1-mesa-dev libgbm-dev libwayland-dev \
+            libxkbcommon-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libei-dev pkg-config || echo "apt warning — the release goes on without display"
+
+      - name: build (workspace + display)
+        run: |
+          set -e
+          bash scripts/ci-unpatch-display.sh
+          cargo build --release --workspace
+          if cargo build --release --manifest-path display/Cargo.toml; then
+            echo "DISPLAY_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "DISPLAY_OK=0" >> "$GITHUB_ENV"
+            echo "::warning::zyrisd-display build failed — shipping without display"
+          fi
+
+      - name: install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: package (tarball + deb)
+        run: |
+          set -e
+          mkdir -p dist
+          if [ "$DISPLAY_OK" = "1" ]; then
+            tar czf dist/zyrisd-x86_64-linux.tar.gz -C target/release zyrisd -C display/target/release zyrisd-display
+          else
+            tar czf dist/zyrisd-x86_64-linux.tar.gz -C target/release zyrisd
+          fi
+          if [ "$DISPLAY_OK" != "1" ]; then
+            sed -i '/zyrisd-display/d' crates/zyrisd/Cargo.toml
+          fi
+          cargo deb --no-build -p zyrisd
+          cp target/debian/*.deb dist/
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: dist/*
+
+  linux-aarch64:
+    name: Linux aarch64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: display build deps (keep going on failure — display is optional)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1-mesa-dev libgbm-dev libwayland-dev \
+            libxkbcommon-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libei-dev pkg-config || echo "apt warning — the release goes on without display"
+
+      - name: build (workspace + display)
+        run: |
+          set -e
+          bash scripts/ci-unpatch-display.sh
+          cargo build --release --workspace
+          if cargo build --release --manifest-path display/Cargo.toml; then
+            echo "DISPLAY_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "DISPLAY_OK=0" >> "$GITHUB_ENV"
+            echo "::warning::zyrisd-display build failed — shipping without display"
+          fi
+
+      - name: install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: package (tarball + deb)
+        run: |
+          set -e
+          mkdir -p dist
+          if [ "$DISPLAY_OK" = "1" ]; then
+            tar czf dist/zyrisd-aarch64-linux.tar.gz -C target/release zyrisd -C display/target/release zyrisd-display
+          else
+            tar czf dist/zyrisd-aarch64-linux.tar.gz -C target/release zyrisd
+          fi
+          if [ "$DISPLAY_OK" != "1" ]; then
+            sed -i '/zyrisd-display/d' crates/zyrisd/Cargo.toml
+          fi
+          cargo deb --no-build -p zyrisd
+          cp target/debian/*.deb dist/
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-aarch64
+          path: dist/*
+
+  windows-x86_64:
+    name: Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build (workspace)
+        run: cargo build --release --workspace
+
+      - name: smoke test
+        run: .\target\release\zyrisd.exe --version
+
+      - name: package (zip + NSIS installer)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path target\release\zyrisd.exe -DestinationPath dist\zyrisd-x86_64-windows.zip
+          Copy-Item target\release\zyrisd.exe packaging\windows\zyrisd.exe -Force
+          choco install nsis -y --no-progress
+          Push-Location packaging\windows
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          Pop-Location
+          Move-Item packaging\windows\zyrisd-setup-x86_64.exe dist\ -Force
+          Remove-Item packaging\windows\zyrisd.exe -Force
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/*
+
+  release:
+    name: create release
+    needs: [linux-x86_64, linux-aarch64, windows-x86_64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: assemble assets (install scripts + checksums)
+        run: |
+          set -e
+          cp install.sh install.ps1 dist/
+          (cd dist && sha256sum *) > dist/SHA256SUMS
+          ls -la dist
+
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+            TAG="v${VERSION}"
+          fi
+          # In case the same tag is re-run: delete the existing release (and tag), then recreate.
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" dist/* \
+            --title "zyrisd $TAG" \
+            --notes "Automated build release. See the README for install instructions."

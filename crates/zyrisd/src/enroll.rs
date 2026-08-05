@@ -13,7 +13,12 @@ use zyrisd_node::config;
 
 pub async fn enroll() -> ExitCode {
     // Enrolling as root leaves the credential in /root, where the session daemon never finds it.
-    if unsafe { libc::geteuid() } == 0 {
+    // Windows has no notion of root, so this check is Unix-only.
+    #[cfg(unix)]
+    let running_as_root = unsafe { libc::geteuid() } == 0;
+    #[cfg(not(unix))]
+    let running_as_root = false;
+    if running_as_root {
         eprintln!("Do not run zyrisd enroll as root.");
         eprintln!("The credential lands in /root, where your session daemon cannot find it.");
         return ExitCode::from(2);

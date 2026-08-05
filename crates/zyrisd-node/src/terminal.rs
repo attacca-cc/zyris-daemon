@@ -139,10 +139,19 @@ impl Terminal for GatedTerminal {
             None => self.gate.root().to_path_buf(),
         };
 
-        let mut cmd = tokio::process::Command::new("/bin/sh");
-        cmd.arg("-c")
-            .arg(&command)
-            .current_dir(&dir)
+        #[cfg(unix)]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("/bin/sh");
+            c.arg("-c").arg(&command);
+            c
+        };
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("cmd");
+            c.arg("/C").arg(&command);
+            c
+        };
+        cmd.current_dir(&dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

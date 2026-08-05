@@ -115,10 +115,19 @@ fn default_node_name() -> String {
 }
 
 pub fn home() -> Result<PathBuf, ConfigError> {
-    std::env::var_os("HOME")
-        .filter(|h| !h.is_empty())
-        .map(PathBuf::from)
-        .ok_or(ConfigError::NoHome)
+    let home = std::env::var_os("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
+    // Native Windows shells (cmd/PowerShell) have no HOME. USERPROFILE takes that place.
+    home.or_else(windows_home).ok_or(ConfigError::NoHome)
+}
+
+#[cfg(windows)]
+fn windows_home() -> Option<PathBuf> {
+    std::env::var_os("USERPROFILE").filter(|h| !h.is_empty()).map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn windows_home() -> Option<PathBuf> {
+    None
 }
 
 /// `$HOME/.config/zyrisd`. Does not honor `XDG_CONFIG_HOME` — see the module comment.

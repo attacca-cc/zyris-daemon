@@ -29,6 +29,9 @@ pub async fn status() -> ExitCode {
             .unwrap_or_else(|| "unknown".into());
         println!("service    {active}");
     } else {
+        #[cfg(windows)]
+        println!("service    not installed — on Windows use the exe installer (zyrisd-setup)");
+        #[cfg(not(windows))]
         println!("service    not installed — run `zyrisd install`");
     }
 

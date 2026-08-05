@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/zyrisd", "crates/zyrisd-node", "crates/zyrisd-display-proto"]
+# display/ is not a member. In the same workspace, one `cargo build --workspace` would unify
+# zyris-capkit's desktop feature and link X11/Wayland into the parent binary too.
+# Feature unification is per cargo invocation, across every member in it — not per crate.
+exclude = ["display"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+# rev is origin/main HEAD (2026-08-04). scripts/check-zyris-pin.sh guards it.
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
+zyrisd-node = { path = "crates/zyrisd-node" }
+zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
+
+anyhow = "1.0"
+bytes = "1.12"
+libc = "0.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+thiserror = "2.0"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "process", "signal", "fs", "io-util", "sync", "time"] }
+toml = "0.9"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

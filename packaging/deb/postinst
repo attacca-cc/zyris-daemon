@@ -1,0 +1,13 @@
+#!/bin/sh
+# Enable nothing here. The package cannot know which user should get linger and the unit
+# enabled (this is a system-wide install), and approving enrollment takes a human anyway.
+set -e
+cat <<'MSG'
+
+zyrisd is installed. Run the remaining two steps from your user account:
+
+  zyrisd enroll     Register this machine with your Attacca account
+  zyrisd install    Connect automatically on every boot
+
+MSG
+exit 0

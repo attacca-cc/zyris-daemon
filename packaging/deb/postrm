@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+  cat <<'MSG'
+
+The zyrisd binary is gone. Per-user service settings are still there —
+the package cannot tell which users enabled it, so it cannot remove them.
+Next time, run `zyrisd uninstall` before removing the package.
+
+To clean up the rest, from each user account:
+
+  systemctl --user disable --now zyrisd
+  rm -f ~/.config/systemd/user/zyrisd.service
+  loginctl disable-linger "$USER"
+
+MSG
+fi
+exit 0

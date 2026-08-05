@@ -1,0 +1,20 @@
+# Build output. Two workspaces, so two target dirs.
+/target
+/display/target
+
+# Working notes and design docs — not source.
+/CLAUDE.md
+/docs/
+/.build-logs/
+
+# Editing leftovers
+*.bak
+*.orig
+*.rej
+*.swp
+*~
+
+# Editors and OS
+/.idea/
+/.vscode/
+.DS_Store

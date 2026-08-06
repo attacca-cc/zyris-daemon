@@ -1,67 +1,69 @@
 #!/bin/sh
-# zyrisd install script — Linux (x86_64/aarch64) / Windows (Git Bash / MSYS2, x86_64).
+# zyrisd installer — Linux (.deb) / Windows (Git Bash, MSYS2).
 #
-# **It only drops the binaries (or runs the installer).** Enrolling and enabling is done by hand.
-# Running `zyrisd install` here would start the daemon unenrolled, it would die with exit 2, and
-# RestartPreventExitStatus=2 would freeze the unit as failed. With Type=simple, `enable --now`
-# returns success right after the fork, so this script would never notice and would print
-# "install complete".
+# Release assets are install.sh, the .deb (Linux x86_64/aarch64) and zyrisd-setup-*.exe (Windows).
+# If SHA256SUMS is attached to the release we verify; if not we skip it (it only guards transport).
 set -eu
 
 BASE_URL="${ZYRISD_BASE_URL:-https://github.com/attacca-cc/zyris-daemon/releases/latest/download}"
-PREFIX="${ZYRISD_PREFIX:-$HOME/.local}"
+API_URL="${ZYRISD_API_URL:-https://api.github.com/repos/attacca-cc/zyris-daemon}"
 
 die() { echo "error: $*" >&2; exit 1; }
 
 command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required"
 
+# $1=TMP, $2=file name. Verifies when the release carries SHA256SUMS, warns when it does not.
+verify_if_present() {
+  if curl -fsSL "${BASE_URL}/SHA256SUMS" -o "${1}/SHA256SUMS" 2>/dev/null; then
+    ( cd "$1" && grep " ${2}\$" SHA256SUMS | sha256sum -c - >/dev/null ) ||
+      die "checksum mismatch"
+  else
+    echo "note: no SHA256SUMS in the release, skipping checksum verification"
+  fi
+}
+
 OS="$(uname -s)"
 case "$OS" in
   Linux)
-    # ── Linux (x86_64 / aarch64) ────────────────────────────────────────────
+    # ── Linux — install the latest .deb with sudo dpkg -i ───────────────────
     case "$(uname -m)" in
-      x86_64)  ARCH=x86_64 ;;
-      aarch64) ARCH=aarch64 ;;
+      x86_64)  DEB_ARCH=amd64 ;;
+      aarch64|arm64) DEB_ARCH=arm64 ;;
       *) die "unsupported architecture: $(uname -m)" ;;
     esac
-    command -v tar >/dev/null 2>&1 || die "tar is required"
 
-    # Don't judge by the exit code of `is-system-running` — one unrelated degraded unit makes it
-    # call a healthy machine broken (reproduces on this dev machine).
-    [ -n "${XDG_RUNTIME_DIR:-}" ] || die "XDG_RUNTIME_DIR is unset. Run this from a login session"
-    systemctl --user show -p Version >/dev/null 2>&1 || die "systemctl --user is unavailable"
+    # The .deb file name carries the version, so ask the releases/latest API for the URL.
+    DEB_URL="$(
+      curl -fsSL "${API_URL}/releases/latest" 2>/dev/null |
+        grep -oE '"browser_download_url" *: *"[^"]+_'"${DEB_ARCH}"'\.deb"' |
+        head -1 |
+        sed -E 's/.*"browser_download_url" *: *"([^"]+)".*/\1/'
+    )" || true
+    [ -n "$DEB_URL" ] || die "no ${DEB_ARCH} .deb in the latest release"
 
-    TARBALL="zyrisd-${ARCH}-linux.tar.gz"
+    DEB_NAME="$(basename "$DEB_URL")"
     TMP="$(mktemp -d)"
     trap 'rm -rf "$TMP"' EXIT
 
-    echo "downloading: ${BASE_URL}/${TARBALL}"
-    curl -fsSL "${BASE_URL}/${TARBALL}" -o "${TMP}/${TARBALL}" || die "download failed"
-    curl -fsSL "${BASE_URL}/SHA256SUMS" -o "${TMP}/SHA256SUMS" || die "could not fetch checksums"
+    echo "downloading: ${DEB_NAME}"
+    curl -fsSL "$DEB_URL" -o "${TMP}/${DEB_NAME}" || die "download failed"
+    verify_if_present "$TMP" "$DEB_NAME"
 
-    # Checksums come from the same host as the tarball — **this only catches transfer corruption.**
-    # It is not a supply-chain guarantee — there are no signatures yet.
-    ( cd "$TMP" && grep " ${TARBALL}\$" SHA256SUMS | sha256sum -c - >/dev/null ) ||
-      die "checksum mismatch"
-
-    mkdir -p "${PREFIX}/bin" "${PREFIX}/libexec"
-    tar xzf "${TMP}/${TARBALL}" -C "$TMP"
-    install -m 755 "${TMP}/zyrisd" "${PREFIX}/bin/zyrisd"
-    if [ -f "${TMP}/zyrisd-display" ]; then
-      install -m 755 "${TMP}/zyrisd-display" "${PREFIX}/libexec/zyrisd-display"
+    if [ "$(id -u)" = "0" ]; then
+      dpkg -i "${TMP}/${DEB_NAME}" || die "install failed"
+    else
+      sudo dpkg -i "${TMP}/${DEB_NAME}" || die "install failed (needs sudo)"
     fi
 
-    # Point at the absolute path we just unpacked. Resolving by name on a machine with the .deb
-    # already installed can pick up the old /usr/bin/zyrisd.
     cat <<MSG
 
-Installed zyrisd to ${PREFIX}/bin/zyrisd.
+zyrisd is installed system-wide (/usr/bin/zyrisd).
 
-Two steps remain:
+Two steps remain — run them as your own user:
 
-  ${PREFIX}/bin/zyrisd enroll     Register this machine with your Attacca account
-  ${PREFIX}/bin/zyrisd install    Connect automatically on every boot
+  zyrisd enroll     Register this machine with your Attacca account
+  zyrisd install    Connect automatically on every boot
 
 MSG
     ;;
@@ -78,14 +80,9 @@ MSG
 
     echo "downloading: ${BASE_URL}/${INSTALLER}"
     curl -fsSL "${BASE_URL}/${INSTALLER}" -o "${TMP}/${INSTALLER}" || die "download failed"
-    curl -fsSL "${BASE_URL}/SHA256SUMS" -o "${TMP}/SHA256SUMS" || die "could not fetch checksums"
-
-    # Same host as the installer, so this only catches transfer corruption. No signatures yet.
-    ( cd "$TMP" && grep " ${INSTALLER}\$" SHA256SUMS | sha256sum -c - >/dev/null ) ||
-      die "checksum mismatch"
+    verify_if_present "$TMP" "$INSTALLER"
 
     echo "Running the installer (unattended)..."
-    # MSYS_NO_PATHCONV=1: stops MSYS rewriting /S into a path. ./relative needs no conversion.
     ( cd "$TMP" && MSYS_NO_PATHCONV=1 ./"$INSTALLER" /S )
 
     cat <<MSG

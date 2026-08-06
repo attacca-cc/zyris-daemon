@@ -162,7 +162,11 @@ jobs:
         run: |
           set -e
           cp install.sh install.ps1 dist/
-          (cd dist && sha256sum *) > dist/SHA256SUMS
+          # Write the sums outside dist, then move them in. Redirecting straight into dist/
+          # truncates the file before the glob runs, so SHA256SUMS lists itself with the hash
+          # of an empty file — a line that can never verify.
+          (cd dist && sha256sum -- *) > SHA256SUMS
+          mv SHA256SUMS dist/
           ls -la dist
 
       - name: create release

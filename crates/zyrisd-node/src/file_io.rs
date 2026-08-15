@@ -7,7 +7,7 @@
 
 use zyris::{Chunk, Datum, Streaming};
 use zyris_capkit::LocalFileIo;
-use zyris_caps::{DirEntry, FileIo, FileRead, FileStat};
+use zyris_caps::{DirEntry, FileEdit, FileIo, FileRead, FileStat};
 
 use crate::gate::PathGate;
 
@@ -62,8 +62,21 @@ impl FileIo for GatedFileIo {
         self.inner.write(self.ok(&path)?, data, overwrite).await
     }
 
-    async fn remove(&self, path: String) -> zyris::Result<()> {
-        self.inner.remove(self.ok(&path)?).await
+    /// `recursive` is the caller's to decide and is passed through untouched. The gate has already
+    /// settled the only question that is this layer's: whether the path is one this node serves.
+    /// A tree under an allowed root is as removable as a file in it.
+    async fn remove(&self, path: String, recursive: Option<bool>) -> zyris::Result<()> {
+        self.inner.remove(self.ok(&path)?, recursive).await
+    }
+
+    async fn edit(
+        &self,
+        path: String,
+        old_string: String,
+        new_string: String,
+        replace_all: bool,
+    ) -> zyris::Result<FileEdit> {
+        self.inner.edit(self.ok(&path)?, old_string, new_string, replace_all).await
     }
 
     async fn mkdir(&self, path: String) -> zyris::Result<()> {
@@ -106,7 +119,7 @@ mod tests {
         assert!(g.list("/etc".into()).await.is_err(), "list");
         assert!(g.read(out.clone(), None, None).await.is_err(), "read");
         assert!(g.read_stream(out.clone(), None, None).await.is_err(), "read_stream");
-        assert!(g.remove(out.clone()).await.is_err(), "remove");
+        assert!(g.remove(out.clone(), None).await.is_err(), "remove");
         assert!(g.mkdir("/etc/zyrisd-should-not-exist".into()).await.is_err(), "mkdir");
         assert!(g.write("/etc/zyrisd-nope".into(), text("x"), true).await.is_err(), "write");
 

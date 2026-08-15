@@ -2494,7 +2494,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 [[package]]
 name = "zyris"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=75f7e5d0f98baa1f72c63c762fb8e577d4b0638e#75f7e5d0f98baa1f72c63c762fb8e577d4b0638e"
+source = "git+https://github.com/attacca-cc/zyris?rev=cacaf0252f61bf1aa99e9491cde2a2a38dcb1102#cacaf0252f61bf1aa99e9491cde2a2a38dcb1102"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2516,10 +2516,11 @@ dependencies = [
 [[package]]
 name = "zyris-capkit"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=75f7e5d0f98baa1f72c63c762fb8e577d4b0638e#75f7e5d0f98baa1f72c63c762fb8e577d4b0638e"
+source = "git+https://github.com/attacca-cc/zyris?rev=cacaf0252f61bf1aa99e9491cde2a2a38dcb1102#cacaf0252f61bf1aa99e9491cde2a2a38dcb1102"
 dependencies = [
  "bytes",
  "futures-util",
+ "libc",
  "portable-pty",
  "tokio",
  "tracing",
@@ -2531,7 +2532,7 @@ dependencies = [
 [[package]]
 name = "zyris-caps"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=75f7e5d0f98baa1f72c63c762fb8e577d4b0638e#75f7e5d0f98baa1f72c63c762fb8e577d4b0638e"
+source = "git+https://github.com/attacca-cc/zyris?rev=cacaf0252f61bf1aa99e9491cde2a2a38dcb1102#cacaf0252f61bf1aa99e9491cde2a2a38dcb1102"
 dependencies = [
  "schemars",
  "serde",
@@ -2542,7 +2543,7 @@ dependencies = [
 [[package]]
 name = "zyris-macros"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=75f7e5d0f98baa1f72c63c762fb8e577d4b0638e#75f7e5d0f98baa1f72c63c762fb8e577d4b0638e"
+source = "git+https://github.com/attacca-cc/zyris?rev=cacaf0252f61bf1aa99e9491cde2a2a38dcb1102#cacaf0252f61bf1aa99e9491cde2a2a38dcb1102"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2552,7 +2553,7 @@ dependencies = [
 [[package]]
 name = "zyris-proto"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=75f7e5d0f98baa1f72c63c762fb8e577d4b0638e#75f7e5d0f98baa1f72c63c762fb8e577d4b0638e"
+source = "git+https://github.com/attacca-cc/zyris?rev=cacaf0252f61bf1aa99e9491cde2a2a38dcb1102#cacaf0252f61bf1aa99e9491cde2a2a38dcb1102"
 dependencies = [
  "base64 0.23.1",
  "bytes",

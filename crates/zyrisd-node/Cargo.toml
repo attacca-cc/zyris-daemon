@@ -17,8 +17,12 @@ toml.workspace = true
 tracing.workspace = true
 zyris.workspace = true
 zyris-caps.workspace = true
-# Default features only (file-io, terminal). Only display/ turns on desktop.
+# Default features only (file-io, terminal) plus transfer, set at the workspace level. Only
+# display/ turns on desktop.
 zyris-capkit.workspace = true
+zyris-attacca.workspace = true
+zyris-p2p.workspace = true
+anyhow.workspace = true
 
 [dev-dependencies]
 tempfile = "3.27"

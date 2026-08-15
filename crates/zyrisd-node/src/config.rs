@@ -26,6 +26,7 @@ pub struct Config {
     pub terminal: TerminalConfig,
     pub desktop: DesktopConfig,
     pub notify: NotifyConfig,
+    pub transfer: TransferConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -72,6 +73,27 @@ pub struct NotifyConfig {
     pub enabled: bool,
 }
 
+/// Node-to-node file transfer: a file goes straight from one of this account's machines to
+/// another, without passing through Attacca.
+///
+/// On by default, like `desktop` and `notify`, and for the same reason — this daemon exists to
+/// hand a machine to its owner's agent. It also grants nothing new: `file_io` already gives the
+/// agent the roots below, and a peer here has to be a live node of the same account before its
+/// connection is accepted at all.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TransferConfig {
+    pub enabled: bool,
+    /// Where files from a peer land, one directory per sending node.
+    pub inbox: PathBuf,
+    /// Where a file that is about to be overwritten is moved first.
+    pub undo: PathBuf,
+    /// The relay to fall back on when two peers cannot reach each other directly. Empty means the
+    /// public ones, which carry the connection but not its contents — they still see who talks to
+    /// whom, so a deployment running its own says so here.
+    pub relay_url: String,
+}
+
 impl Default for NodeConfig {
     fn default() -> NodeConfig {
         NodeConfig { name: default_node_name(), server_url: zyris::DEFAULT_SERVER_URL.to_string() }
@@ -103,6 +125,22 @@ impl Default for DesktopConfig {
 impl Default for NotifyConfig {
     fn default() -> NotifyConfig {
         NotifyConfig { enabled: true }
+    }
+}
+
+impl Default for TransferConfig {
+    fn default() -> TransferConfig {
+        // Under `$HOME` so the default `roots = ["~"]` already covers them: a file that arrives is
+        // one the agent can then read through `file_io`, which is the only reason receiving it is
+        // useful. Built from `home()` rather than an XDG variable for the reason in the module
+        // comment — the systemd user manager has none, so `enroll` and `run` would disagree.
+        let base = home().unwrap_or_else(|_| PathBuf::from(".")).join(".local/share/zyrisd");
+        TransferConfig {
+            enabled: true,
+            inbox: base.join("inbox"),
+            undo: base.join("undo"),
+            relay_url: String::new(),
+        }
     }
 }
 

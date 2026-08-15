@@ -1,5 +1,6 @@
 //! Assembles the node, keeps it alive, and dies properly when it dies.
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -12,6 +13,7 @@ use crate::credentials::{file_store, StoredOnly};
 use crate::file_io::GatedFileIo;
 use crate::gate::PathGate;
 use crate::terminal::GatedTerminal;
+use crate::transfer::Transfer;
 
 /// Long enough for the close frame to reach the server. Same value as upstream `CLOSE_GRACE`.
 const CLOSE_GRACE: Duration = Duration::from_millis(200);
@@ -99,6 +101,10 @@ pub async fn run(cfg: Config) -> Exit {
         return Exit::Retry;
     }
 
+    // Taken before `roots` is moved into the gates below. `send_to` reads out of one directory and
+    // upstream takes exactly one, so it gets the same first root the PTY uses as its cwd.
+    let send_root = roots.first().cloned().unwrap_or_else(|| PathBuf::from("."));
+
     let store = file_store();
     let credentials = match StoredOnly::new(&cfg.node.server_url, cfg.node.name.clone(), store) {
         Ok(c) => Arc::new(c),
@@ -120,9 +126,33 @@ pub async fn run(cfg: Config) -> Exit {
         GatedTerminal::new(PathGate::new(roots.clone(), deny.clone()), cfg.terminal.clone());
     let files = GatedFileIo::new(PathGate::new(roots, deny));
 
-    let runner = Runner::new(run_config, credentials.clone())
+    let mut runner = Runner::new(run_config, credentials.clone())
         .capability(TerminalServer(terminal))
         .capability(FileIoServer(files));
+
+    // Bound before the runner starts, because a node announces what it can do before it has
+    // anywhere to say it. The rendezvous client and the accept loop both arrive on the connection
+    // that comes later — see `transfer::Transfer::on_connect`.
+    //
+    // A failure to bind is not a reason to stop being a node. The socket may be unavailable for
+    // reasons that have nothing to do with the terminal and files this daemon is mostly here for,
+    // so it is logged and the rest comes up regardless.
+    let transfer = if cfg.transfer.enabled {
+        let pins = crate::config::config_dir().join("peers.json");
+        match Transfer::bind(&cfg.transfer, send_root, pins).await {
+            Ok(t) => {
+                let t = Arc::new(t);
+                runner = runner.capability(t.capability());
+                Some(t)
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Could not start file transfer. Continuing without it");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // Grab this before the spawn. `capabilities()` takes `&self` and `Capabilities` is Clone (Arc
     // inside), so moving it into the desktop watch task later still points at the same set.
@@ -135,10 +165,18 @@ pub async fn run(cfg: Config) -> Exit {
         // Fill it synchronously in the closure **body** and hand back an empty future.
         let caps = caps.clone();
         let name = cfg.node.name.clone();
-        move |conn| {
-            hook_slot.put(conn);
+        let transfer = transfer.clone();
+        move |conn: Connection| {
+            // If the slot fill lived in the returned future, a signal could land before it is
+            // scheduled. It stays here, in the body; the future only holds work that must await.
+            hook_slot.put(conn.clone());
             publish_state(&name, true, &caps);
-            std::future::ready(())
+            let transfer = transfer.clone();
+            async move {
+                if let Some(transfer) = transfer {
+                    transfer.on_connect(&conn).await;
+                }
+            }
         }
     });
 

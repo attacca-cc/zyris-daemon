@@ -3627,6 +3627,7 @@ dependencies = [
  "enigo",
  "futures-util",
  "image",
+ "libc",
  "libwayshot-xcap",
  "portable-pty",
  "tokio",
@@ -3673,7 +3674,7 @@ dependencies = [
 
 [[package]]
 name = "zyrisd-display"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3688,7 +3689,7 @@ dependencies = [
 
 [[package]]
 name = "zyrisd-display-proto"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",

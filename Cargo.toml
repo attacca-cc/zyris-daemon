@@ -12,17 +12,17 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# Not origin/main: this is the head of zyris PR #27, which adds `TofuStore::forget` and `pins` —
-# what `zyrisd unpin` and `zyrisd peers` are built on. Move to main's sha once that merges.
+# rev is origin/main HEAD. `TofuStore::forget` and `pins` are what `zyrisd unpin` and
+# `zyrisd peers` are built on (zyris PR #27).
 # scripts/check-zyris-pin.sh guards that both workspaces agree.
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271", features = ["enroll"] }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271", features = ["transfer-send", "transfer-listen"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["transfer-send", "transfer-listen"] }
 # Both are transfer's doing: the rendezvous client the send side asks where a peer is, and the
 # transport it dials over. Declared here with the others so the pin covers them too — a member
 # crate declaring one itself links zyris twice and earns "same type, different types".
-zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271" }
-zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271" }
+zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
+zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
 zyrisd-node = { path = "crates/zyrisd-node" }
 zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
 

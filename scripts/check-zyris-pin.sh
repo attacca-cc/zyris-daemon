@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-REV="184f93fd9d2fdae49ac7bebb28e0e6617d0bc271"
+REV="5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
 fail=0
 
 check_manifest() {

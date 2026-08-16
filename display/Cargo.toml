@@ -21,9 +21,9 @@ serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271" }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "184f93fd9d2fdae49ac7bebb28e0e6617d0bc271", features = ["desktop", "input-wayland", "input-libei"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["desktop", "input-wayland", "input-libei"] }
 
 # Uses the local ~/zyris worktree — bare super key, and the GNOME move_to fallback fix. Once
 # those land on origin/main and the pin moves up, this section can go.

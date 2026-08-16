@@ -13,6 +13,17 @@ pub struct State {
     pub connected: bool,
     pub capabilities: Vec<String>,
     pub updated_unix: i64,
+    /// This machine's peer endpoint id, once transfer has bound one — the thing the fingerprint a
+    /// person reads out is a fingerprint of.
+    ///
+    /// Here rather than derived from the key file by whoever wants it: reading that file means
+    /// knowing its format, and the one function that knows it creates a key when there is none,
+    /// which is not a side effect `zyrisd status` should have. `None` while transfer is off or has
+    /// not bound yet, which is the honest answer — there is no fingerprint to compare then.
+    ///
+    /// `serde(default)` so a state file written by an older build still parses.
+    #[serde(default)]
+    pub endpoint_id: Option<String>,
 }
 
 /// The spot the unit's `RuntimeDirectory=zyrisd` creates for us.
@@ -56,10 +67,31 @@ mod tests {
             node_name: "box".into(),
             connected: true,
             capabilities: vec!["terminal".into(), "file_io".into()],
+            endpoint_id: Some("d3adb33f".into()),
             updated_unix: 1_700_000_000,
         };
         write(&s);
         assert_eq!(read().unwrap(), s);
         assert!(!dir.path().join("zyrisd/state.json.tmp").exists(), "temp file left behind");
+    }
+
+    /// A state file written by a build that predates `endpoint_id` has to keep parsing.
+    ///
+    /// The file survives an upgrade — it is whatever the daemon last wrote, and `zyrisd status`
+    /// reads it the moment the new binary lands, before any daemon has rewritten it. Without the
+    /// `serde(default)` this is not a missing fingerprint, it is `status` reporting "the daemon is
+    /// not running" about a daemon that is.
+    #[test]
+    fn a_state_file_from_before_the_endpoint_id_still_parses() {
+        let older = r#"{
+            "node_name": "box",
+            "connected": true,
+            "capabilities": ["terminal"],
+            "updated_unix": 1700000000
+        }"#;
+        let parsed: State = serde_json::from_str(older).expect("an older state file must parse");
+        assert_eq!(parsed.node_name, "box");
+        assert!(parsed.connected);
+        assert_eq!(parsed.endpoint_id, None, "there was no fingerprint to know about");
     }
 }

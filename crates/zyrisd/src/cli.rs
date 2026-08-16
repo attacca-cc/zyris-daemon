@@ -7,6 +7,9 @@ zyrisd — keeps this machine connected to Attacca
 
 Usage:
   zyrisd enroll               Register this machine with your Attacca account
+  zyrisd peers                List this account's machines and which ones are pinned
+  zyrisd pin <name>           Confirm a machine's fingerprint and trust it to receive from here
+  zyrisd unpin <name>         Forget a pin
   zyrisd run                  Run the daemon (what systemd calls)
   zyrisd install              Install as a service so it starts at boot
   zyrisd status               Show enrollment, service, and capability status
@@ -18,6 +21,25 @@ pub async fn dispatch() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("run") => run().await,
         Some("enroll") => crate::enroll::enroll().await,
+        Some("peers") => crate::peers::peers().await,
+        // The name is required rather than defaulted: a pin names exactly one machine, and there
+        // is no sensible guess at which.
+        Some("pin") => match args.get(1) {
+            Some(slug) => crate::peers::pin(slug).await,
+            None => {
+                eprintln!("Which machine? `zyrisd peers` lists them.\n");
+                print!("{USAGE}");
+                ExitCode::from(2)
+            }
+        },
+        Some("unpin") => match args.get(1) {
+            Some(slug) => crate::peers::unpin(slug).await,
+            None => {
+                eprintln!("Which machine? `zyrisd peers` lists them.\n");
+                print!("{USAGE}");
+                ExitCode::from(2)
+            }
+        },
         Some("install") => match crate::service::install() {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {

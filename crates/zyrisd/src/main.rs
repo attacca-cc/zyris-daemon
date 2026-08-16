@@ -5,6 +5,7 @@
 
 mod cli;
 mod enroll;
+mod peers;
 mod service;
 mod status;
 

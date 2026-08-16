@@ -39,6 +39,16 @@ pub async fn status() -> ExitCode {
         Some(s) => {
             println!("connection {}", if s.connected { "connected" } else { "disconnected" });
             println!("capability {}", s.capabilities.join(", "));
+            // The one line someone on the *other* machine needs. They are about to run
+            // `zyrisd pin` over there and be shown a fingerprint; this is what they compare it
+            // against, and until now it existed only in a log line at startup.
+            match &s.endpoint_id {
+                Some(id) => println!(
+                    "fingerprint {}",
+                    zyris_p2p::fingerprint::fingerprint(id).unwrap_or_else(|_| id.clone())
+                ),
+                None => println!("fingerprint none (file transfer is off or has not bound yet)"),
+            }
         }
         None => println!("connection unknown (the daemon is not running)"),
     }

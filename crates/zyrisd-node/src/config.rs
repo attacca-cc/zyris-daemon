@@ -181,6 +181,15 @@ pub fn credentials_path() -> PathBuf {
     config_dir().join("credentials.json")
 }
 
+/// The ledger of peers a person has confirmed, by slug.
+///
+/// Named here rather than built at each use because two places need it — the daemon that reads it
+/// on every inbound connection and the `zyrisd pin` that writes it — and a ledger they disagreed
+/// about would be one they each thought was empty.
+pub fn pins_path() -> PathBuf {
+    config_dir().join("peers.json")
+}
+
 /// The ed25519 key this node is known by on the peer network, and **the thing a fingerprint is a
 /// fingerprint of.** Beside the credential because it is the same kind of secret: `load_or_create`
 /// writes it `0600` and refuses to read it back at any wider mode.

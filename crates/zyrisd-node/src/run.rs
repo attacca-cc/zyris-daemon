@@ -52,11 +52,17 @@ fn classify_refused(credential_gave_up: bool) -> Exit {
 /// Records the current announce set so `zyrisd status` can read it.
 ///
 /// The set shifts at runtime as the desktop child comes and goes — config alone can't tell you.
-fn publish_state(node_name: &str, connected: bool, caps: &zyris::Capabilities) {
+fn publish_state(
+    node_name: &str,
+    connected: bool,
+    caps: &zyris::Capabilities,
+    endpoint_id: Option<String>,
+) {
     crate::state::write(&crate::state::State {
         node_name: node_name.to_string(),
         connected,
         capabilities: caps.descriptors().iter().map(|d| d.name.clone()).collect(),
+        endpoint_id,
         updated_unix: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
@@ -138,7 +144,7 @@ pub async fn run(cfg: Config) -> Exit {
     // reasons that have nothing to do with the terminal and files this daemon is mostly here for,
     // so it is logged and the rest comes up regardless.
     let transfer = if cfg.transfer.enabled {
-        let pins = crate::config::config_dir().join("peers.json");
+        let pins = crate::config::pins_path();
         let key_path = crate::config::peer_key_path();
         match Transfer::bind(&cfg.transfer, send_root, pins, key_path).await {
             Ok(t) => {
@@ -155,6 +161,11 @@ pub async fn run(cfg: Config) -> Exit {
         None
     };
 
+    // `None` when transfer is off or failed to bind, which is the honest answer: there is no
+    // fingerprint for anyone to compare against until an endpoint exists. Fixed for the life of the
+    // process — the key is loaded from disk once, so this does not change under a reconnect.
+    let endpoint_id = transfer.as_ref().map(|t| t.endpoint_id().to_string());
+
     // Grab this before the spawn. `capabilities()` takes `&self` and `Capabilities` is Clone (Arc
     // inside), so moving it into the desktop watch task later still points at the same set.
     let caps = runner.capabilities();
@@ -167,11 +178,12 @@ pub async fn run(cfg: Config) -> Exit {
         let caps = caps.clone();
         let name = cfg.node.name.clone();
         let transfer = transfer.clone();
+        let endpoint_id = endpoint_id.clone();
         move |conn: Connection| {
             // If the slot fill lived in the returned future, a signal could land before it is
             // scheduled. It stays here, in the body; the future only holds work that must await.
             hook_slot.put(conn.clone());
-            publish_state(&name, true, &caps);
+            publish_state(&name, true, &caps, endpoint_id.clone());
             let transfer = transfer.clone();
             async move {
                 if let Some(transfer) = transfer {
@@ -182,7 +194,7 @@ pub async fn run(cfg: Config) -> Exit {
     });
 
     tracing::info!(node = %cfg.node.name, url = %cfg.node.server_url, "Starting zyrisd");
-    publish_state(&cfg.node.name, false, &caps);
+    publish_state(&cfg.node.name, false, &caps, endpoint_id.clone());
 
     // Third branch: watches the desktop child. Rewrites the state file as the announce set changes.
     let watcher_slot = slot.clone();
@@ -190,12 +202,13 @@ pub async fn run(cfg: Config) -> Exit {
         let caps = caps.clone();
         let desktop = cfg.desktop.clone();
         let name = cfg.node.name.clone();
+        let endpoint_id = endpoint_id.clone();
         let for_change = caps.clone();
         async move {
             crate::display::watch(caps, desktop, move || {
                 // Child up or down changes the announce set. Write the connection state too —
                 // hardcoding `true` lies "connected" even while backoff has us disconnected.
-                publish_state(&name, watcher_slot.is_alive(), &for_change);
+                publish_state(&name, watcher_slot.is_alive(), &for_change, endpoint_id.clone());
             })
             .await
         }
@@ -218,7 +231,7 @@ pub async fn run(cfg: Config) -> Exit {
                 let alive = slot.is_alive();
                 if last != Some(alive) {
                     last = Some(alive);
-                    publish_state(&name, alive, &caps);
+                    publish_state(&name, alive, &caps, endpoint_id.clone());
                 }
             }
         }

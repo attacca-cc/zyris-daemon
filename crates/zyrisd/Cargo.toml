@@ -20,6 +20,10 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zyris.workspace = true
+# `peers`/`pin`/`unpin`: the rendezvous the list comes from, and the ledger it is compared against.
+zyris-attacca.workspace = true
+zyris-p2p.workspace = true
+async-trait = "0.1"
 
 [package.metadata.deb]
 maintainer = "Attacca <minenaturecrew@gmail.com>"

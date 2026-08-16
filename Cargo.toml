@@ -7,7 +7,7 @@ members = ["crates/zyrisd", "crates/zyrisd-node", "crates/zyrisd-display-proto"]
 exclude = ["display"]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 

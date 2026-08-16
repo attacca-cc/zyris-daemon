@@ -5,7 +5,7 @@
 
 [package]
 name = "zyrisd-display"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "zyrisd desktop helper. The only binary that links graphics libraries"

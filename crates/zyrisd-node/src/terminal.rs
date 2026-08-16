@@ -6,10 +6,11 @@
 //! decorator cannot kill the process group at all, and an output cap could only trim a string
 //! that is already fully in memory.
 
+use std::collections::HashMap;
 use std::process::Stdio;
 use std::time::Duration;
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zyris::{Blob, Streaming};
 use zyris_capkit::PtyTerminal;
 use zyris_caps::{ExecOutput, PtyChunk, PtyId, PtyOpened, PtyRead, PtyScreen, Settle, Terminal};
@@ -128,33 +129,86 @@ impl Terminal for GatedTerminal {
         self.inner.close(pty).await
     }
 
+    /// Implemented here rather than delegated, because `PtyTerminal::exec` reads the child to
+    /// completion inside itself and leaves no handle to kill the process group from outside. The
+    /// timeout below has to reach the whole tree, not just the shell that was spawned.
+    #[allow(clippy::too_many_arguments)]
     async fn exec(
         &self,
-        command: String,
+        command: Option<String>,
+        argv: Option<Vec<String>>,
         cwd: Option<String>,
         timeout_ms: Option<u64>,
+        stdin: Option<String>,
+        env: Option<HashMap<String, String>>,
+        shell: Option<String>,
     ) -> zyris::Result<ExecOutput> {
+        let argv = match argv {
+            Some(a) if a.is_empty() => {
+                return Err(zyris::WireError::invalid_params("argv must not be empty"))
+            }
+            other => other,
+        };
+        let has_command = matches!(command.as_deref(), Some(c) if !c.trim().is_empty());
+        match (has_command, argv.is_some()) {
+            (false, false) => {
+                return Err(zyris::WireError::invalid_params("give `command` or `argv`, not neither"))
+            }
+            (true, true) => {
+                return Err(zyris::WireError::invalid_params("give `command` or `argv`, not both"))
+            }
+            _ => {}
+        }
+
         let dir = match cwd {
             Some(c) => self.gate.check(&c)?,
             None => self.gate.root().to_path_buf(),
         };
 
-        #[cfg(unix)]
-        let mut cmd = {
-            let mut c = tokio::process::Command::new("/bin/sh");
-            c.arg("-c").arg(&command);
-            c
+        let mut cmd = match argv {
+            // No shell at all: the arguments reach the program exactly as given, which is what
+            // makes this the path a caller should prefer for anything with a quote in it.
+            Some(argv) => {
+                let mut c = tokio::process::Command::new(&argv[0]);
+                c.args(&argv[1..]);
+                c
+            }
+            None => {
+                let line = command.unwrap_or_default();
+                #[cfg(unix)]
+                {
+                    let mut c = tokio::process::Command::new(
+                        shell.unwrap_or_else(|| "/bin/sh".to_string()),
+                    );
+                    c.arg("-c").arg(&line);
+                    c
+                }
+                #[cfg(windows)]
+                {
+                    // `shell` names a Unix shell; Windows command mode is cmd /C, and a caller
+                    // wanting PowerShell picks it through `argv`.
+                    let _ = &shell;
+                    let mut c = tokio::process::Command::new("cmd");
+                    c.arg("/C").arg(&line);
+                    c
+                }
+            }
         };
-        #[cfg(windows)]
-        let mut cmd = {
-            let mut c = tokio::process::Command::new("cmd");
-            c.arg("/C").arg(&command);
-            c
-        };
+
+        let wants_stdin = stdin.is_some();
         cmd.current_dir(&dir)
-            .stdin(Stdio::null())
+            .stdin(if wants_stdin { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        // Caller overrides first, the deny list last, so the order decides who wins — and it has
+        // to be the deny list. Applied the other way round, a caller could put `SSH_AUTH_SOCK`
+        // back through `env` and undo the one guarantee this strip exists to make.
+        if let Some(env) = env {
+            for (k, v) in env {
+                cmd.env(k, v);
+            }
+        }
         // Credentials that reach other machines never go to the shell. A PTY shell inherits the
         // daemon's whole environment, and the systemd user manager's environment block carries
         // the SSH_AUTH_SOCK the session pushed in at graphical login.
@@ -169,6 +223,16 @@ impl Terminal for GatedTerminal {
         })?;
         let pid = child.id().unwrap_or(0) as i32;
         let cap = self.cfg.max_output_bytes;
+
+        // Written and closed before the output is gathered. Left open, a child that reads its
+        // stdin to EOF never gets one and the call waits out the timeout for no reason.
+        if let Some(text) = stdin {
+            if let Some(mut pipe) = child.stdin.take() {
+                let _ = pipe.write_all(text.as_bytes()).await;
+                let _ = pipe.shutdown().await;
+            }
+        }
+
         let mut stdout = child.stdout.take().expect("piped");
         let mut stderr = child.stderr.take().expect("piped");
 
@@ -187,6 +251,8 @@ impl Terminal for GatedTerminal {
                 stdout: finish(o, oc),
                 stderr: finish(e, ec),
                 timed_out: false,
+                stdout_truncated: oc,
+                stderr_truncated: ec,
             }),
             Err(_) => {
                 #[cfg(unix)]
@@ -201,6 +267,8 @@ impl Terminal for GatedTerminal {
                     stdout: String::new(),
                     stderr: "command timed out; the whole process group was killed".into(),
                     timed_out: true,
+                    stdout_truncated: false,
+                    stderr_truncated: false,
                 })
             }
         }
@@ -219,11 +287,23 @@ mod tests {
         )
     }
 
+    /// `exec`'s `command` form, which is what these tests exercise. Spelling out all seven
+    /// arguments at every call would bury the one thing each test is actually varying.
+    async fn run(
+        t: &GatedTerminal,
+        command: &str,
+        cwd: Option<&str>,
+        timeout_ms: Option<u64>,
+    ) -> zyris::Result<ExecOutput> {
+        t.exec(Some(command.to_string()), None, cwd.map(str::to_string), timeout_ms, None, None, None)
+            .await
+    }
+
     #[tokio::test]
     async fn exec_runs_and_captures() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
-        let out = term(&root).exec("echo hi".into(), None, None).await.unwrap();
+        let out = run(&term(&root), "echo hi", None, None).await.unwrap();
         assert_eq!(out.exit_code, 0);
         assert_eq!(out.stdout.trim(), "hi");
         assert!(!out.timed_out);
@@ -238,10 +318,10 @@ mod tests {
     async fn output_over_the_cap_is_truncated_but_the_command_still_completes() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
-        let out = term(&root)
-            .exec("head -c 100000 /dev/zero | tr '\\0' 'a'".into(), None, Some(5_000))
-            .await
-            .unwrap();
+        let out =
+            run(&term(&root), "head -c 100000 /dev/zero | tr '\\0' 'a'", None, Some(5_000))
+                .await
+                .unwrap();
         assert!(!out.timed_out, "going over the cap deadlocked");
         assert_eq!(out.exit_code, 0, "the command must exit normally");
         assert!(out.stdout.len() < 200, "way over the cap: {}", out.stdout.len());
@@ -256,7 +336,7 @@ mod tests {
         let marker = root.join("still-alive");
         // A surviving grandchild creates the file after 2s. Kill the group and it never appears.
         let cmd = format!("(sleep 2; touch {}) & sleep 5", marker.display());
-        let out = term(&root).exec(cmd, None, Some(300)).await.unwrap();
+        let out = run(&term(&root), &cmd, None, Some(300)).await.unwrap();
         assert!(out.timed_out);
         assert_eq!(out.exit_code, -1);
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -273,7 +353,7 @@ mod tests {
             TerminalConfig { exec_timeout_secs: 1, ..Default::default() },
         );
         let started = std::time::Instant::now();
-        let out = t.exec("sleep 30".into(), None, Some(60_000)).await.unwrap();
+        let out = run(&t, "sleep 30", None, Some(60_000)).await.unwrap();
         assert!(out.timed_out);
         assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
     }
@@ -283,7 +363,7 @@ mod tests {
     async fn a_cwd_outside_the_root_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
-        assert!(term(&root).exec("pwd".into(), Some("/etc".into()), None).await.is_err());
+        assert!(run(&term(&root), "pwd", Some("/etc"), None).await.is_err());
     }
 
     /// Credentials that reach other machines never go to the shell.
@@ -293,10 +373,8 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         // SAFETY: the test mutates its own process environment. No other test reads this var.
         unsafe { std::env::set_var("SSH_AUTH_SOCK", "/run/user/1000/keyring/ssh") };
-        let out = term(&root)
-            .exec("printf '[%s]' \"$SSH_AUTH_SOCK\"".into(), None, None)
-            .await
-            .unwrap();
+        let out =
+            run(&term(&root), "printf '[%s]' \"$SSH_AUTH_SOCK\"", None, None).await.unwrap();
         assert_eq!(out.stdout.trim(), "[]");
     }
 
@@ -310,10 +388,10 @@ mod tests {
             PathGate::new(vec![root.to_path_buf()], vec![]),
             TerminalConfig { max_output_bytes: 1 << 20, exec_timeout_secs: 10, unset_env: vec![] },
         );
-        let out = t
-            .exec("head -c 400000 /dev/zero | tr '\\0' 'e' >&2; echo done".into(), None, None)
-            .await
-            .unwrap();
+        let out =
+            run(&t, "head -c 400000 /dev/zero | tr '\\0' 'e' >&2; echo done", None, None)
+                .await
+                .unwrap();
         assert!(!out.timed_out, "deadlocked into a timeout");
         assert_eq!(out.stdout.trim(), "done");
         assert_eq!(out.stderr.len(), 400_000);

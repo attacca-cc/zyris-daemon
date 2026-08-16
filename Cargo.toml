@@ -12,10 +12,15 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# rev is origin/main HEAD (2026-08-04). scripts/check-zyris-pin.sh guards it.
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e", features = ["enroll"] }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "75f7e5d0f98baa1f72c63c762fb8e577d4b0638e" }
+# rev is origin/main HEAD (2026-08-16). scripts/check-zyris-pin.sh guards it.
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "cacaf0252f61bf1aa99e9491cde2a2a38dcb1102", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "cacaf0252f61bf1aa99e9491cde2a2a38dcb1102" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "cacaf0252f61bf1aa99e9491cde2a2a38dcb1102", features = ["transfer-send", "transfer-listen"] }
+# Both are transfer's doing: the rendezvous client the send side asks where a peer is, and the
+# transport it dials over. Declared here with the others so the pin covers them too — a member
+# crate declaring one itself links zyris twice and earns "same type, different types".
+zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "cacaf0252f61bf1aa99e9491cde2a2a38dcb1102" }
+zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "cacaf0252f61bf1aa99e9491cde2a2a38dcb1102" }
 zyrisd-node = { path = "crates/zyrisd-node" }
 zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
 

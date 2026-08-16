@@ -12,9 +12,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # 22.04, not 24.04, and the version is the whole point. A glibc-linked binary runs on the
+  # glibc it was built against or newer, never older, so the build host sets the oldest system
+  # the release can be installed on. 24.04 ships glibc 2.39; v0.1.0 and v0.2.0 were built there
+  # and would not load on Debian 12 (2.36) at all — `version GLIBC_2.38 not found`, before main.
+  # 22.04 ships 2.35, which covers Debian 12 and Ubuntu 22.04 upward. Raising this runner
+  # silently narrows who can install; the glibc floor check below is what makes that loud.
   linux-x86_64:
     name: Linux x86_64
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -37,6 +43,16 @@ jobs:
           else
             echo "DISPLAY_OK=0" >> "$GITHUB_ENV"
             echo "::warning::zyrisd-display build failed — shipping without display"
+          fi
+
+      # Before packaging, not after: a binary that cannot start on the oldest system we claim to
+      # support is not a release asset, and the runner is the only place that fact is visible.
+      - name: glibc floor
+        run: |
+          set -e
+          bash scripts/check-glibc-floor.sh target/release/zyrisd
+          if [ "$DISPLAY_OK" = "1" ]; then
+            bash scripts/check-glibc-floor.sh display/target/release/zyrisd-display
           fi
 
       - name: install cargo-deb
@@ -63,9 +79,10 @@ jobs:
           name: linux-x86_64
           path: dist/*
 
+  # Same glibc floor as x86_64 — see the note on that job.
   linux-aarch64:
     name: Linux aarch64
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -88,6 +105,16 @@ jobs:
           else
             echo "DISPLAY_OK=0" >> "$GITHUB_ENV"
             echo "::warning::zyrisd-display build failed — shipping without display"
+          fi
+
+      # Before packaging, not after: a binary that cannot start on the oldest system we claim to
+      # support is not a release asset, and the runner is the only place that fact is visible.
+      - name: glibc floor
+        run: |
+          set -e
+          bash scripts/check-glibc-floor.sh target/release/zyrisd
+          if [ "$DISPLAY_OK" = "1" ]; then
+            bash scripts/check-glibc-floor.sh display/target/release/zyrisd-display
           fi
 
       - name: install cargo-deb

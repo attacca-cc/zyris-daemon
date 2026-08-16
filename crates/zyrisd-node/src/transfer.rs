@@ -67,12 +67,21 @@ impl Transfer {
         cfg: &TransferConfig,
         send_root: PathBuf,
         pins: PathBuf,
+        key_path: PathBuf,
     ) -> anyhow::Result<Transfer> {
         for dir in [&cfg.inbox, &cfg.undo] {
             std::fs::create_dir_all(dir)?;
         }
 
+        // Without this the endpoint generates a fresh key every start, and `key.rs` spells out
+        // what that costs: a peer that pinned us sees a stranger and refuses us. It is the quiet
+        // kind of broken — receiving keeps working, because the accept loop admits any live node
+        // of this account without consulting a pin, so nothing complains until the day someone
+        // tries to *send* to a machine that pinned this one.
+        let secret = zyris_p2p::key::load_or_create(&key_path).await?;
+
         let builder = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret)
             .alpns(vec![zyris_p2p::transport::ALPN.to_vec()]);
         let builder = match cfg.relay_url.trim() {
             "" => {
@@ -126,6 +135,11 @@ impl Transfer {
         FileTransferServer(self.transfer.clone())
     }
 
+    /// What a peer pins, and what the printed fingerprint is derived from.
+    pub fn endpoint_id(&self) -> &str {
+        &self.endpoint_id
+    }
+
     /// Runs on every connect: hands the transfer its rendezvous client, republishes where this
     /// node can be reached, and starts the accept loop the first time.
     pub async fn on_connect(&self, conn: &Connection) {
@@ -166,5 +180,63 @@ impl Transfer {
             serve_peers(endpoint, Arc::new(directory), peer_config, tofu, endpoint_id).await;
             tracing::warn!("The peer accept loop ended");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(dir: &std::path::Path) -> TransferConfig {
+        TransferConfig {
+            enabled: true,
+            inbox: dir.join("inbox"),
+            undo: dir.join("undo"),
+            relay_url: String::new(),
+        }
+    }
+
+    async fn bind_at(dir: &std::path::Path, key: &std::path::Path) -> Transfer {
+        Transfer::bind(&config(dir), dir.to_path_buf(), dir.join("peers.json"), key.to_path_buf())
+            .await
+            .unwrap()
+    }
+
+    /// A restart must not change who this machine is.
+    ///
+    /// The fingerprint a human reads out and compares is a fingerprint of this key. If binding
+    /// generated a new one each start — which is what iroh does when handed no key — then every
+    /// pin made against this node would stop matching the next time the service bounced, and the
+    /// comparison the pin is built on would have been for nothing.
+    #[tokio::test]
+    async fn the_endpoint_id_survives_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("peer_key");
+
+        let first = bind_at(dir.path(), &key).await;
+        let before = first.endpoint_id().to_string();
+        first.endpoint.close().await;
+
+        let second = bind_at(dir.path(), &key).await;
+        assert_eq!(
+            before,
+            second.endpoint_id(),
+            "the node came back as a stranger, so every pin against it is now dead"
+        );
+        second.endpoint.close().await;
+    }
+
+    /// The other half of the claim: the id is not a constant, so the test above is comparing
+    /// something that could have differed.
+    #[tokio::test]
+    async fn a_different_key_is_a_different_node() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let a = bind_at(dir.path(), &dir.path().join("key-a")).await;
+        let b = bind_at(dir.path(), &dir.path().join("key-b")).await;
+
+        assert_ne!(a.endpoint_id(), b.endpoint_id());
+        a.endpoint.close().await;
+        b.endpoint.close().await;
     }
 }

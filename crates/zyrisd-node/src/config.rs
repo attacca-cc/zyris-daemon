@@ -181,6 +181,17 @@ pub fn credentials_path() -> PathBuf {
     config_dir().join("credentials.json")
 }
 
+/// The ed25519 key this node is known by on the peer network, and **the thing a fingerprint is a
+/// fingerprint of.** Beside the credential because it is the same kind of secret: `load_or_create`
+/// writes it `0600` and refuses to read it back at any wider mode.
+///
+/// It has to survive a restart. A fresh key each run makes this machine a stranger to every peer
+/// that pinned it, so the pin a human made by comparing fingerprints would expire the next time
+/// the service bounced — which is not a pin at all.
+pub fn peer_key_path() -> PathBuf {
+    config_dir().join("peer_key")
+}
+
 /// Expands only `~` and `~/`. `~user` is not supported.
 fn expand_tilde(raw: &str, home: &Path) -> PathBuf {
     if raw == "~" {

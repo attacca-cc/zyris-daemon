@@ -139,7 +139,8 @@ pub async fn run(cfg: Config) -> Exit {
     // so it is logged and the rest comes up regardless.
     let transfer = if cfg.transfer.enabled {
         let pins = crate::config::config_dir().join("peers.json");
-        match Transfer::bind(&cfg.transfer, send_root, pins).await {
+        let key_path = crate::config::peer_key_path();
+        match Transfer::bind(&cfg.transfer, send_root, pins, key_path).await {
             Ok(t) => {
                 let t = Arc::new(t);
                 runner = runner.capability(t.capability());

@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use zyris::Connection;
+use zyris::{Connection, ErrorCode};
 use zyris_attacca::{AttaccaApi, AttaccaApiClient};
 use zyris_caps::FileTransferServer;
 use zyris_capkit::transfer::listen::serve_peers;
@@ -158,6 +158,15 @@ impl Transfer {
                     endpoint_id = %self.endpoint_id,
                     addrs = addrs.len(),
                     "Published this node's peer address"
+                ),
+                // A credential granted before this daemon asked for `peers:write` still works for
+                // everything else, so the node comes up looking healthy and only this one call is
+                // refused. Say what to do about it rather than printing the code and leaving the
+                // operator to work out that a scope is granted with the credential and cannot be
+                // added to one that already exists.
+                Err(e) if e.code == ErrorCode::ForbiddenScope => tracing::error!(
+                    "This node's credential predates the peers:write scope, so no peer can find \
+                     it and file transfer cannot start. Run `zyrisd enroll` again to replace it."
                 ),
                 Err(e) => tracing::warn!(error = %e, "Could not publish. Peers cannot find us"),
             },

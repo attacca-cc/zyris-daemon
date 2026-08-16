@@ -67,13 +67,27 @@ pub async fn enroll() -> ExitCode {
         }
     }
 
-    // No scopes. zyrisd is a pure tool provider with no reason to touch the owner account, and
-    // "requests no account access" on the consent screen reads better anyway.
+    // One scope, and it is not account access. `peers:write` covers publishing this machine's own
+    // peer address and looking up another machine of the same account — the two calls file
+    // transfer is made of. Without it `peer_publish` comes back
+    //
+    //     ForbiddenScope: this node was not granted the peers:write scope
+    //
+    // so nothing is ever published, `peer_lookup` has nothing to answer with, and no peer can find
+    // this machine. Not a transfer that works badly; the absence of one, whose only trace is a
+    // warning in a log nobody is sitting in front of. This file used to pass `Vec::new()` with a
+    // comment about the consent screen reading better, written before there was anything to
+    // publish.
+    //
+    // Asked for unconditionally rather than only when `transfer.enabled`. Scopes are granted with
+    // the credential and cannot be widened afterwards, so tying this to a config flag would mean
+    // that turning transfer on later left a daemon that comes up, announces the capability, and
+    // silently cannot use it until someone enrolls again.
     let enroller = match Enroller::new(
         &cfg.node.server_url,
         cfg.node.name.clone(),
         platform().to_string(),
-        Vec::new(),
+        vec!["peers:write".to_string()],
         Arc::clone(&store),
     ) {
         Ok(e) => e,

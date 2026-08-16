@@ -335,4 +335,40 @@ mod tests {
         let (_, deny) = Config::default().resolve_roots();
         assert!(deny.contains(&config_dir()), "{deny:?}");
     }
+
+    /// **An upgrade must never be a re-enrollment.**
+    ///
+    /// Everything that makes this machine *this* node — the credential, the peer key a pin is a
+    /// pin on, the ledger of pins — sits under one directory, and nothing in that path depends on
+    /// which build wrote it. A version, a build hash or an install prefix appearing anywhere in it
+    /// would turn every upgrade into a silent enrollment: the new binary would find no credential,
+    /// ask for a code, come back under a new endpoint id, and every peer that had pinned this
+    /// machine would meet a stranger. The user would be told to approve something in a browser for
+    /// what should have been a file swap.
+    ///
+    /// Asserted on the shape of the paths rather than on their exact value, because the point is
+    /// not where the directory is but that a release cannot move it.
+    #[test]
+    fn upgrading_never_moves_what_makes_this_machine_this_node() {
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(config_dir().ends_with("zyrisd"), "{}", config_dir().display());
+        assert!(
+            config_dir().parent().is_some_and(|p| p.ends_with(".config")),
+            "{}",
+            config_dir().display()
+        );
+
+        for path in [config_path(), credentials_path(), peer_key_path()] {
+            assert!(
+                path.starts_with(config_dir()),
+                "{} left the one directory an upgrade preserves",
+                path.display()
+            );
+            assert!(
+                !path.display().to_string().contains(version),
+                "{} carries the version, so the next release cannot find it",
+                path.display()
+            );
+        }
+    }
 }

@@ -12,19 +12,19 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# Not origin/main: this is the head of zyris PR #24, which carries the five defects the live
-# run on a second machine turned up — the rustls provider panic, the regenerated peer identity,
-# the missing peers:write scope, the write-once rendezvous client, and the dial that let a
-# peer's own unreachable addresses shut discovery out. Move this to main's sha once that merges.
+# rev is origin/main HEAD. It carries the five defects a live run on a second machine turned up —
+# the rustls provider panic, the peer identity regenerated at every start, the missing peers:write
+# scope, the write-once rendezvous client, and the dial that let a peer's own unreachable addresses
+# shut discovery out (zyris PR #24).
 # scripts/check-zyris-pin.sh guards that both workspaces agree.
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "ce6026ed4d7596609a4da85a4b4a051eb2ed9e86", features = ["enroll"] }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "ce6026ed4d7596609a4da85a4b4a051eb2ed9e86" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "ce6026ed4d7596609a4da85a4b4a051eb2ed9e86", features = ["transfer-send", "transfer-listen"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "b61de02491820b6a32f014db2b5b6ed72dcf4df9", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "b61de02491820b6a32f014db2b5b6ed72dcf4df9" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "b61de02491820b6a32f014db2b5b6ed72dcf4df9", features = ["transfer-send", "transfer-listen"] }
 # Both are transfer's doing: the rendezvous client the send side asks where a peer is, and the
 # transport it dials over. Declared here with the others so the pin covers them too — a member
 # crate declaring one itself links zyris twice and earns "same type, different types".
-zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "ce6026ed4d7596609a4da85a4b4a051eb2ed9e86" }
-zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "ce6026ed4d7596609a4da85a4b4a051eb2ed9e86" }
+zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "b61de02491820b6a32f014db2b5b6ed72dcf4df9" }
+zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "b61de02491820b6a32f014db2b5b6ed72dcf4df9" }
 zyrisd-node = { path = "crates/zyrisd-node" }
 zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
 

@@ -4669,7 +4669,7 @@ dependencies = [
 
 [[package]]
 name = "zyrisd"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -4684,7 +4684,7 @@ dependencies = [
 
 [[package]]
 name = "zyrisd-display-proto"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4693,7 +4693,7 @@ dependencies = [
 
 [[package]]
 name = "zyrisd-node"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "bytes",

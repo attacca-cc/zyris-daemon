@@ -176,10 +176,14 @@ impl Transfer {
         if self.listening.swap(true, Ordering::SeqCst) {
             return;
         }
-        let Ok(directory) = conn.wait_capability::<AttaccaApiClient>(CONSUME_WAIT).await else {
-            self.listening.store(false, Ordering::SeqCst);
-            return;
-        };
+        // The loop starts once and outlives this connection, so it gets the transfer's own
+        // rendezvous handle rather than this connection's client. `set_api` above keeps that handle
+        // current. A client captured here would be dead after the first reconnect, and the peer
+        // cache behind it could never refresh again — which is not a quiet degradation: the loop
+        // goes on judging inbound peers against whatever the account looked like at startup, so a
+        // machine that enrolled later is refused as "not a node of this account", forever. Seen
+        // exactly that way in the field before this line changed.
+        let directory = self.transfer.rendezvous();
         let endpoint = self.endpoint.clone();
         let peer_config = self.peer_config.clone();
         let tofu = self.tofu.clone();

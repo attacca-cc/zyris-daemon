@@ -11,7 +11,18 @@ ${Using:StrFunc} StrStr
 !include "WinMessages.nsh"
 
 !define APPNAME "zyrisd"
-!define VERSION "0.1.0"
+; Passed in by release.yml as /DVERSION=<crate version>. The fallback is only for a hand-run
+; makensis; every release carries the real number. Hardcoding it meant Add/Remove Programs said
+; 0.1.0 for the 0.2.x and 0.3.x releases alike, which is the one place a person looks to find out
+; what they have installed.
+!ifndef VERSION
+  !define VERSION "0.0.0"
+!endif
+; VIProductVersion takes four numeric fields and nothing else, so a pre-release tag like
+; 0.3.0-rc1 cannot be reused here. release.yml passes the stripped number separately.
+!ifndef VERSION4
+  !define VERSION4 "0.0.0.0"
+!endif
 !define PUBLISHER "Attacca"
 
 Name "${APPNAME} ${VERSION}"
@@ -20,7 +31,7 @@ InstallDir "$LOCALAPPDATA\zyrisd"
 InstallDirRegKey HKCU "Software\zyrisd" "InstallDir"
 RequestExecutionLevel user
 
-VIProductVersion "0.1.0.0"
+VIProductVersion "${VERSION4}"
 VIAddVersionKey "ProductName" "zyrisd"
 VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "FileVersion" "${VERSION}"

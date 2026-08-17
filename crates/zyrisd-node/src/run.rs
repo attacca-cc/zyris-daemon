@@ -217,7 +217,12 @@ pub async fn run(cfg: Config) -> Exit {
     // Nothing refreshes the connection state on a drop (upstream Runner has no disconnect hook).
     // on_connect only overwrites the slot and never clears a dead connection, so after a silent
     // drop, `zyrisd status` shows "connection" as "connected" forever. Rewrite the real state
-    // periodically — touch the file only when the value changed.
+    // periodically.
+    //
+    // Every tick, not only when the value changed. The timestamp is the other half of what this
+    // file says: `State::is_recent` is how a reader tells a daemon that is connected from one that
+    // was connected when it died, and skipping the write on an unchanged value leaves a healthy
+    // daemon's file ageing until it looks like a corpse.
     let refresher = {
         let caps = caps.clone();
         let name = cfg.node.name.clone();
@@ -225,14 +230,9 @@ pub async fn run(cfg: Config) -> Exit {
         async move {
             let mut tick = tokio::time::interval(Duration::from_secs(30));
             tick.tick().await; // Already wrote once above at startup. Skip the immediate tick.
-            let mut last: Option<bool> = None;
             loop {
                 tick.tick().await;
-                let alive = slot.is_alive();
-                if last != Some(alive) {
-                    last = Some(alive);
-                    publish_state(&name, alive, &caps, endpoint_id.clone());
-                }
+                publish_state(&name, slot.is_alive(), &caps, endpoint_id.clone());
             }
         }
     };

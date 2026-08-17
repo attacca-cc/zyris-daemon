@@ -4,6 +4,8 @@
 //! linger has neither `DISPLAY` nor `DBUS_SESSION_BUS_ADDRESS`, and a later login running
 //! `import-environment` does not apply retroactively to an already-running process.
 
+// Both are only reached from the unix fallback below, so on Windows the import itself is unused.
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -52,6 +54,12 @@ fn fallback_environment() -> Vec<(String, String)> {
 }
 
 /// The pure part, split out so tests can hand it socket directories directly.
+///
+/// Unix-only along with its one caller: the paths it walks are Wayland, X11 and dbus sockets,
+/// which is why the Windows `fallback_environment` above returns nothing. Left ungated it was a
+/// never-used function on Windows, and its test failed there for the same reason — the socket
+/// layout it asserts does not exist on that platform.
+#[cfg(unix)]
 fn fallback_from_dirs(run_user: &Path, x11: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
 
@@ -139,6 +147,7 @@ mod tests {
 
     /// Finds the session variables in the standard socket dirs without systemctl (spec §6 fallback).
     /// Also checks that a `.lock` file is never used as the socket name.
+    #[cfg(unix)]
     #[test]
     fn the_fallback_scans_the_standard_socket_dirs() {
         let dir = tempfile::tempdir().unwrap();
@@ -167,6 +176,7 @@ mod tests {
     }
 
     /// No socket at all means an empty list. Injecting nothing beats injecting a wrong value.
+    #[cfg(unix)]
     #[test]
     fn the_fallback_without_any_socket_is_empty() {
         let dir = tempfile::tempdir().unwrap();

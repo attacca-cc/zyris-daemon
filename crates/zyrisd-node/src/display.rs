@@ -97,10 +97,13 @@ fn internal(msg: impl std::fmt::Display) -> WireError {
     WireError::new(ErrorCode::Internal, msg.to_string())
 }
 
-fn kill(pid: i32) {
+/// The desktop child is Linux-only (it links Wayland/X11), so on Windows there is never a pid to
+/// signal. `_pid` rather than a body full of `#[cfg]`: the argument is unused there by design,
+/// and the warning it raised otherwise is noise a reader has to re-diagnose every time.
+fn kill(_pid: i32) {
     #[cfg(unix)]
-    if pid > 0 {
-        unsafe { libc::kill(pid, libc::SIGKILL) };
+    if _pid > 0 {
+        unsafe { libc::kill(_pid, libc::SIGKILL) };
     }
 }
 

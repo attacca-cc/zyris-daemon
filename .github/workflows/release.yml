@@ -167,7 +167,11 @@ jobs:
           Copy-Item target\release\zyrisd.exe packaging\windows\zyrisd.exe -Force
           choco install nsis -y --no-progress
           Push-Location packaging\windows
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          # The tag is the source of the version; the .nsi only has a fallback for a hand run.
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          # VIProductVersion is four numeric fields, so a pre-release suffix has to come off.
+          $numeric = ($version -replace '[-+].*$', '')
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DVERSION=$version" "/DVERSION4=$numeric.0" installer.nsi
           Pop-Location
           Move-Item packaging\windows\zyrisd-setup-x86_64.exe dist\ -Force
           Remove-Item packaging\windows\zyrisd.exe -Force

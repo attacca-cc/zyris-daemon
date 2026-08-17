@@ -19,6 +19,7 @@ use crate::config::TerminalConfig;
 use crate::gate::PathGate;
 
 /// Grace between SIGTERM and SIGKILL.
+#[cfg(unix)]
 const KILL_GRACE: Duration = Duration::from_millis(200);
 
 pub struct GatedTerminal {
@@ -74,6 +75,28 @@ fn kill_group(pid: i32, sig: i32) {
     if pid > 0 {
         unsafe { libc::kill(-pid, sig) };
     }
+}
+
+/// Windows has no process group to signal, and `Child::kill` reaches only the process that was
+/// spawned — for a command run through `cmd /C` that is the interpreter, not the program it
+/// started. `taskkill /T` walks the tree by pid, which is the nearest equivalent of the negative
+/// pid above and needs no new dependency.
+///
+/// Without this the timeout killed nothing at all on Windows while still reporting that it had,
+/// so a runaway command kept the machine and the agent was told it was over.
+#[cfg(windows)]
+async fn kill_tree(pid: i32, child: &mut tokio::process::Child) {
+    if pid > 0 {
+        let _ = tokio::process::Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+    }
+    // `taskkill` can miss — a pid that already exited, a process this user may not touch. The
+    // direct child is reachable either way, and leaving it is the one outcome worth ruling out.
+    let _ = child.start_kill();
 }
 
 fn finish(bytes: Vec<u8>, capped: bool) -> String {
@@ -245,7 +268,11 @@ impl Terminal for GatedTerminal {
             (out, err, status)
         };
 
-        match tokio::time::timeout(self.effective_timeout(timeout_ms), collect).await {
+        // Bound to a `let` rather than matched on directly: the timeout future holds the `&mut
+        // child` that `collect` borrowed, and as a match scrutinee that temporary lives until the
+        // end of the match — leaving the kill arm unable to touch the child it has to kill.
+        let outcome = tokio::time::timeout(self.effective_timeout(timeout_ms), collect).await;
+        match outcome {
             Ok(((o, oc), (e, ec), status)) => Ok(ExecOutput {
                 exit_code: status.ok().and_then(|s| s.code()).unwrap_or(-1),
                 stdout: finish(o, oc),
@@ -261,11 +288,13 @@ impl Terminal for GatedTerminal {
                     tokio::time::sleep(KILL_GRACE).await;
                     kill_group(pid, libc::SIGKILL);
                 }
+                #[cfg(windows)]
+                kill_tree(pid, &mut child).await;
                 let _ = pid;
                 Ok(ExecOutput {
                     exit_code: -1,
                     stdout: String::new(),
-                    stderr: "command timed out; the whole process group was killed".into(),
+                    stderr: "command timed out; the whole process tree was killed".into(),
                     timed_out: true,
                     stdout_truncated: false,
                     stderr_truncated: false,
@@ -308,6 +337,15 @@ mod tests {
         assert_eq!(out.stdout.trim(), "hi");
         assert!(!out.timed_out);
     }
+
+    // The tests below drive `exec` through a **Unix shell** — pipes into `tr`, `/dev/zero`,
+    // `sleep`, `&` for a background grandchild. None of that is what they are checking; it is
+    // just how they set the situation up, and `cmd /C` cannot read any of it. Ungated they gave
+    // Windows six red tests that said nothing about Windows. The behaviour each one covers is
+    // re-covered for `cmd` below where it differs.
+    #[cfg(unix)]
+    mod unix_shell {
+        use super::*;
 
     /// Over the cap it marks the truncation and returns **success**. Not an error.
     ///
@@ -395,5 +433,43 @@ mod tests {
         assert!(!out.timed_out, "deadlocked into a timeout");
         assert_eq!(out.stdout.trim(), "done");
         assert_eq!(out.stderr.len(), 400_000);
+        }
+    }
+
+    /// The Windows half of `a_timeout_kills_the_whole_process_group`.
+    ///
+    /// It had no half. The kill on timeout was entirely `#[cfg(unix)]`, so on Windows a command
+    /// that ran past its deadline was left running while `exec` reported that the whole tree had
+    /// been killed — and the timeout is the only thing standing between an agent and a machine
+    /// it will not give back. `tokio::process::Child` does not kill on drop either, so nothing
+    /// downstream caught it.
+    ///
+    /// The grandchild is a `.bat` so the command line stays free of nested quotes; `ping` is the
+    /// sleep because `timeout` needs a console this child does not have.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_timeout_kills_the_whole_process_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let marker = root.join("still-alive");
+        let script = root.join("grandchild.bat");
+        std::fs::write(
+            &script,
+            format!("@echo off\r\nping -n 4 127.0.0.1 >nul\r\necho alive > \"{}\"\r\n", marker.display()),
+        )
+        .unwrap();
+
+        let t = GatedTerminal::new(
+            PathGate::new(vec![root.to_path_buf()], vec![]),
+            TerminalConfig { exec_timeout_secs: 30, ..Default::default() },
+        );
+        let cmd = format!("start /b \"\" \"{}\" & ping -n 20 127.0.0.1 >nul", script.display());
+        let out = run(&t, &cmd, None, Some(500)).await.unwrap();
+
+        assert!(out.timed_out);
+        assert_eq!(out.exit_code, -1);
+        // Longer than the grandchild's own wait, so "never appeared" means killed, not pending.
+        tokio::time::sleep(Duration::from_secs(6)).await;
+        assert!(!marker.exists(), "a grandchild survived the timeout");
     }
 }

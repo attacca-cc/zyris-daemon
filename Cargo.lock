@@ -4559,7 +4559,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 [[package]]
 name = "zyris"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4581,7 +4581,7 @@ dependencies = [
 [[package]]
 name = "zyris-attacca"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "schemars",
  "serde",
@@ -4592,7 +4592,7 @@ dependencies = [
 [[package]]
 name = "zyris-capkit"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4615,7 +4615,7 @@ dependencies = [
 [[package]]
 name = "zyris-caps"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "schemars",
  "serde",
@@ -4626,7 +4626,7 @@ dependencies = [
 [[package]]
 name = "zyris-macros"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "zyris-p2p"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4654,7 +4654,7 @@ dependencies = [
 [[package]]
 name = "zyris-proto"
 version = "0.1.0"
-source = "git+https://github.com/attacca-cc/zyris?rev=5a9ff633104623e1b623f8f9e957b4e23ba3d92c#5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+source = "git+https://github.com/attacca-cc/zyris?rev=542edda310fa2213469755ad6201193d6a9c03de#542edda310fa2213469755ad6201193d6a9c03de"
 dependencies = [
  "base64 0.23.1",
  "bytes",

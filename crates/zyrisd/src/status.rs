@@ -35,7 +35,10 @@ pub async fn status() -> ExitCode {
         println!("service    not installed — run `zyrisd install`");
     }
 
-    match state::read() {
+    // A state file older than the daemon's rewrite interval outlived its writer. Reading its
+    // `connected` flag then would report a daemon that is not there — which is exactly what
+    // `XDG_RUNTIME_DIR` being wiped at logout used to prevent, and nothing wipes on Windows.
+    match state::read().filter(|s| s.is_recent(state::now_unix())) {
         Some(s) => {
             println!("connection {}", if s.connected { "connected" } else { "disconnected" });
             println!("capability {}", s.capabilities.join(", "));

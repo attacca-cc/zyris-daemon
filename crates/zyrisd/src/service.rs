@@ -91,6 +91,10 @@ pub fn restart_if_installed() {
 /// **An already-set `$ZYRISD_DISPLAY_BIN` wins.** Otherwise, in layouts where the child is not
 /// in its conventional place — a dev tree — the desktop works in the foreground and silently
 /// drops out under the service. That has already happened once.
+///
+/// Unix-only because the systemd `install` is its only caller; left ungated it is dead code on
+/// Windows, which is the warning this whole split exists to stop reintroducing.
+#[cfg(unix)]
 fn display_helper_beside(exec: &Path) -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("ZYRISD_DISPLAY_BIN").map(PathBuf::from) {
         if p.exists() {
@@ -108,15 +112,19 @@ fn display_helper_beside(exec: &Path) -> Option<PathBuf> {
     .and_then(|p| p.canonicalize().ok())
 }
 
+/// Windows installs through the exe installer, which registers the `Run` key. Nothing here
+/// applies, and the whole systemd body below is dead code on that target — split rather than
+/// guarded statement by statement, which left `rustc` warning about every line after the bail.
+#[cfg(windows)]
 pub fn install() -> anyhow::Result<()> {
-    #[cfg(windows)]
-    {
-        anyhow::bail!(
-            "On Windows, install with the exe installer (zyrisd-setup). \
-             `zyrisd install` is Linux systemd only."
-        );
-    }
-    #[cfg(unix)]
+    anyhow::bail!(
+        "On Windows, install with the exe installer (zyrisd-setup). \
+         `zyrisd install` is Linux systemd only."
+    )
+}
+
+#[cfg(unix)]
+pub fn install() -> anyhow::Result<()> {
     if unsafe { libc::geteuid() } == 0 {
         anyhow::bail!("Do not run zyrisd install as root. It is a user session service.");
     }
@@ -159,6 +167,7 @@ pub fn install() -> anyhow::Result<()> {
 
 /// With `Type=simple`, `start` returns success right after fork. Check it is actually alive
 /// so that "installed" isn't a lie.
+#[cfg(unix)]
 fn report_liveness() -> bool {
     for _ in 0..12 {
         std::thread::sleep(std::time::Duration::from_millis(300));

@@ -146,10 +146,24 @@ impl Default for TransferConfig {
 
 fn default_node_name() -> String {
     let host = zyris::machine_name().unwrap_or_else(|| "zyrisd".to_string());
-    match std::env::var("USER").ok().filter(|u| !u.is_empty()) {
+    match current_user() {
         Some(user) => format!("{host}-{user}"),
         None => host,
     }
+}
+
+/// The login name, by whatever variable this platform calls it.
+///
+/// `USER` is not a Windows variable. An ssh session happens to set it, so enrolling over ssh
+/// produced `<host>-<user>` and enrolling the way the installer starts the daemon — from the
+/// `Run` key, with no login shell — produced the bare hostname. Same machine, two names, and the
+/// one that loses the suffix loses exactly the protection the suffix is for: two people sharing a
+/// machine get one name each, not one name twice.
+fn current_user() -> Option<String> {
+    std::env::var("USER")
+        .ok()
+        .filter(|u| !u.is_empty())
+        .or_else(|| std::env::var("USERNAME").ok().filter(|u| !u.is_empty()))
 }
 
 pub fn home() -> Result<PathBuf, ConfigError> {
@@ -285,6 +299,30 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The suffix exists so two people sharing a machine get one node name each. Windows sets
+    /// `USERNAME`, not `USER`; an ssh session happens to set `USER` too, so enrolling over ssh
+    /// found a name and enrolling from the `Run` key the installer registers did not — same
+    /// machine, one name with the suffix and one without, and no sign anything was lost.
+    #[test]
+    fn the_login_name_is_found_by_whatever_this_platform_calls_it() {
+        // SAFETY: single-threaded test process, and no other test reads these.
+        unsafe {
+            std::env::remove_var("USER");
+            std::env::set_var("USERNAME", "someone");
+        }
+        assert_eq!(current_user().as_deref(), Some("someone"));
+
+        // `USER` still wins where both exist, so nothing changes on the platforms that had it.
+        unsafe { std::env::set_var("USER", "unix-name") };
+        assert_eq!(current_user().as_deref(), Some("unix-name"));
+
+        unsafe {
+            std::env::remove_var("USER");
+            std::env::remove_var("USERNAME");
+        }
+        assert_eq!(current_user(), None, "neither set is a hostname-only name, not an empty one");
+    }
 
     /// It comes up with no config. The default root is home and deny is empty.
     #[test]

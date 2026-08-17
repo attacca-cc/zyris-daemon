@@ -21,9 +21,9 @@ serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["desktop", "input-wayland", "input-libei"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de", features = ["desktop", "input-wayland", "input-libei"] }
 
 # Uses the local ~/zyris worktree — bare super key, and the GNOME move_to fallback fix. Once
 # those land on origin/main and the pin moves up, this section can go.
@@ -32,9 +32,9 @@ zyris = { path = "/home/ruma/zyris/crates/zyris" }
 zyris-caps = { path = "/home/ruma/zyris/crates/zyris-caps" }
 zyris-capkit = { path = "/home/ruma/zyris/crates/zyris-capkit" }
 
-# Local enigo fork — fixes Shift being dropped in the libei keyboard fallback.
-[patch."https://github.com/mincomk/enigo"]
-enigo = { path = "/home/ruma/enigo-local" }
+# No enigo patch here on purpose. The libei Shift fix lives in ridanit-ruma/enigo-zyris, which
+# zyris-capkit depends on by rev, so this workspace gets it by building capkit — on any machine,
+# not just the one that happened to hold the checkout.
 
 # See the same block in the zyris workspace: full debug info is what fills the disk on this
 # machine, and `line-tables-only` still gives every backtrace frame its file and line.

@@ -13,16 +13,18 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 # rev is origin/main HEAD. `TofuStore::forget` and `pins` are what `zyrisd unpin` and
-# `zyrisd peers` are built on (zyris PR #27).
+# `zyrisd peers` are built on (zyris PR #27); this rev also carries PR #29, without which one
+# transient 502 mid-poll ends an enrollment that still had minutes left on its code, and PR #28,
+# which moves the enigo fork to ridanit-ruma/enigo-zyris.
 # scripts/check-zyris-pin.sh guards that both workspaces agree.
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["enroll"] }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c", features = ["transfer-send", "transfer-listen"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de", features = ["transfer-send", "transfer-listen"] }
 # Both are transfer's doing: the rendezvous client the send side asks where a peer is, and the
 # transport it dials over. Declared here with the others so the pin covers them too — a member
 # crate declaring one itself links zyris twice and earns "same type, different types".
-zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
-zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "5a9ff633104623e1b623f8f9e957b4e23ba3d92c" }
+zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
+zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
 zyrisd-node = { path = "crates/zyrisd-node" }
 zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
 

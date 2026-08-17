@@ -27,3 +27,13 @@ anyhow.workspace = true
 [dev-dependencies]
 tempfile = "3.27"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+# On Windows the desktop capabilities are served from **this** process, so the parent needs the
+# feature the child normally carries.
+#
+# The child exists to keep X11/Wayland/mesa/pipewire out of a binary that has to start on headless
+# Linux — see the two-workspace note in CLAUDE.md. Windows has no such hazard: xcap and enigo bind
+# system DLLs that every install has, so the split would buy a process, a protocol and a watch loop
+# and nothing else. Target-scoped, so Linux resolves exactly as it did.
+[target.'cfg(windows)'.dependencies]
+zyris-capkit = { workspace = true, features = ["desktop"] }

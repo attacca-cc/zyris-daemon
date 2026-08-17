@@ -20,6 +20,48 @@ use zyrisd_display_proto::{read_frame, write_frame, ImageMeta, Request, Response
 
 use crate::config::DesktopConfig;
 
+/// Serves `screen_capture` and `input` from **this** process, which is what Windows does instead
+/// of running a child.
+///
+/// The child exists for one reason: on Linux `zyris-capkit`'s `desktop` feature links X11, Wayland,
+/// mesa and pipewire into whatever binary it touches, and a daemon that has to start on a headless
+/// box dies before `main` if those `.so` files are missing. Windows has no equivalent — `xcap` and
+/// `enigo` bind DLLs that ship with the OS — so the split would cost a process, a framing protocol
+/// and a watch loop and prevent nothing.
+///
+/// Shaped after `zyris-hello::with_desktop`, including the part that matters most here: `input` is
+/// announced only if a display server actually accepts one. A Windows Server box with no interactive
+/// session then falls back to terminal and files rather than advertising a mouse it cannot move.
+///
+/// Configuration follows the child rather than `zyris-hello`: plain `HostScreenCapture::default()`,
+/// keeping capkit's format and size budget. `zyris-hello` turns the budget off to send at native
+/// resolution, which is right for a reference node someone is watching and wrong for a daemon whose
+/// screenshots have to fit inside what Attacca will carry inline.
+#[cfg(windows)]
+pub fn with_desktop(runner: zyris::runtime::Runner, cfg: &DesktopConfig) -> zyris::runtime::Runner {
+    use zyris_capkit::{EnigoInput, HostDisplays, HostScreenCapture};
+
+    if !cfg.enabled {
+        tracing::info!("Desktop is disabled in config; not announcing screen or input");
+        return runner;
+    }
+
+    let screen = HostScreenCapture::default();
+    tracing::info!("Announcing screen_capture");
+    let runner = runner.capability(ScreenCaptureServer(screen));
+
+    match EnigoInput::new(HostDisplays::default()) {
+        Ok(input) => {
+            tracing::info!("Announcing input");
+            runner.capability(InputServer(input))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "No display server for input; not announcing it");
+            runner
+        }
+    }
+}
+
 /// Longest a single request may take. Plenty for a 4K capture plus encoding.
 // The first libei (RemoteDesktop portal) connection waits on the user's allow dialog, so
 // 20s is not enough. Approval is one-time and saved as a token, so later requests stay fast.
@@ -240,6 +282,12 @@ where
         return;
     }
     let Some(path) = helper_path() else {
+        // On Windows there is nothing to find and nothing missing: `with_desktop` announced screen
+        // and input from this process before the runner started. The old wording reported that
+        // design as a fault.
+        #[cfg(windows)]
+        tracing::info!("Screen and input are served in-process here; no helper to watch");
+        #[cfg(not(windows))]
         tracing::info!("No desktop helper found; screen and input will not be offered");
         return;
     };

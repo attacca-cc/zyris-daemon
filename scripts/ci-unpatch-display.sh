@@ -13,11 +13,9 @@ if grep -q '^\[patch\.' display/Cargo.toml; then
   echo "✗ failed to strip the [patch] section" >&2
   exit 1
 fi
-# Also drop the input-libei feature, which exists only in the patched tree — zyris-capkit at
-# the pinned rev has no such feature, and leaving it in breaks dependency resolution.
-sed -i 's/, *"input-libei"//; s/"input-libei", *//; s/"input-libei"//' display/Cargo.toml
-if grep -q 'input-libei' display/Cargo.toml; then
-  echo "✗ failed to strip the input-libei feature" >&2
-  exit 1
-fi
-echo "✓ stripped [patch] and input-libei from display/Cargo.toml (building at the pinned rev)"
+# `input-libei` is deliberately left alone. It used to be stripped here because zyris-capkit at
+# the pinned rev had no such feature, but it has had one since the rev moved to origin/main, and
+# stripping it now *causes* the failure it was added to avoid: `EnigoInput::restore_token` is
+# `#[cfg(feature = "input-libei")]`, so removing the feature removes the method the child calls,
+# and the display check fails with "no method named restore_token".
+echo "✓ stripped [patch] from display/Cargo.toml (building at the pinned rev)"

@@ -176,6 +176,7 @@ mod tests {
     }
 
     /// No socket at all means an empty list. Injecting nothing beats injecting a wrong value.
+    #[cfg(unix)]
     #[test]
     fn the_fallback_without_any_socket_is_empty() {
         let dir = tempfile::tempdir().unwrap();

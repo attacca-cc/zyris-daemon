@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # develop is where the work lands, and nothing checked it after a PR merged. A merge that
+    # moved the zyris pin without updating the script guarding it left develop broken, and the
+    # only thing that said so was the next PR inheriting the failure.
+    branches: [main, develop]
   pull_request:
 
 concurrency:
@@ -31,26 +34,32 @@ jobs:
 
       - name: cargo check (workspace)
         run: cargo check --workspace
-      # display needs patched APIs (settings_for_session, restore_token — RemoteDesktop/libei
-      # token handling), so it doesn't compile at the pinned rev. Once the zyris patch lands
-      # on attacca-cc/zyris origin/main and the pin moves up, make this check required again.
-      - name: cargo check (display, best-effort)
-        run: |
-          if ! cargo check --manifest-path display/Cargo.toml; then
-            echo "::warning::display cannot build at the pinned rev (patched APIs) — not in release"
-          fi
+      # Required again, as the note that used to sit here asked for. Those patched APIs
+      # (settings_for_session, restore_token) are on origin/main and the pin has moved up, so the
+      # child builds at the pinned rev — the last failure was scripts/ci-unpatch-display.sh
+      # stripping the very feature `restore_token` is gated on, not a missing API.
+      - name: cargo check (display)
+        run: cargo check --manifest-path display/Cargo.toml
       - name: cargo test (workspace)
         run: cargo test --workspace
       - name: check zyris pin
         run: bash scripts/check-zyris-pin.sh
 
-  check-windows:
-    name: check (windows)
+  test-windows:
+    name: check + test (windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # display/ is excluded from the workspace, so the workspace check never touches it.
+      # display/ is excluded from the workspace, so neither of these touches it.
       - name: cargo check (workspace)
         run: cargo check --workspace
+      # This job used to stop at `cargo check`. Five Windows-only defects reached a running node
+      # before anyone saw one — a timeout that killed nothing while reporting that it had, a state
+      # file that was never written so three commands read nothing, a node name that lost its user
+      # suffix. `check` catches none of those; the suite catches the first two directly. When it was
+      # first run here it also turned up six red tests that were about the tests, not about Windows:
+      # they drove `exec` through a Unix shell. Those are `#[cfg(unix)]` now.
+      - name: cargo test (workspace)
+        run: cargo test --workspace

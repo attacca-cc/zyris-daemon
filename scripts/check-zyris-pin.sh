@@ -6,7 +6,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-REV="5a9ff633104623e1b623f8f9e957b4e23ba3d92c"
+# Read the rev out of the root manifest rather than holding a copy of it here.
+#
+# It used to be a literal, which made every pin bump a two-file edit where forgetting the second
+# one fails CI with "Cargo.lock does not point at <the old rev>" — a message that describes the
+# check's own staleness as if the tree were wrong. Nothing here needs to know *which* rev is
+# right; the guarantee is that both workspaces and both locks agree on one.
+REV=$(sed -nE 's/^zyris = \{ git = "https:\/\/github.com\/attacca-cc\/zyris", rev = "([0-9a-f]{40})".*/\1/p' Cargo.toml | head -1)
+if [[ -z "$REV" ]]; then
+  echo "✗ Cargo.toml has no pinned zyris rev to check against"
+  exit 1
+fi
+echo "→ checking everything against Cargo.toml's rev ${REV}"
 fail=0
 
 check_manifest() {

@@ -136,6 +136,14 @@ pub async fn run(cfg: Config) -> Exit {
         .capability(TerminalServer(terminal))
         .capability(FileIoServer(files));
 
+    // Windows serves the desktop from this process; Linux spawns the child and the watcher below
+    // attaches it. Announced before the runner starts, because a node says what it can do before
+    // it has anywhere to say it — and unlike the child, this set never changes afterwards.
+    #[cfg(windows)]
+    {
+        runner = crate::display::with_desktop(runner, &cfg.desktop);
+    }
+
     // Bound before the runner starts, because a node announces what it can do before it has
     // anywhere to say it. The rendezvous client and the accept loop both arrive on the connection
     // that comes later — see `transfer::Transfer::on_connect`.

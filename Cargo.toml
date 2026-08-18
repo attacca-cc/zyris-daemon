@@ -13,18 +13,28 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 # rev is origin/main HEAD. `TofuStore::forget` and `pins` are what `zyrisd unpin` and
-# `zyrisd peers` are built on (zyris PR #27); this rev also carries PR #29, without which one
+# `zyrisd peers` are built on (zyris PR #27); the rev also carries PR #29, without which one
 # transient 502 mid-poll ends an enrollment that still had minutes left on its code, and PR #28,
 # which moves the enigo fork to ridanit-ruma/enigo-zyris.
+#
+# **PR #31 is why this rev matters to a running daemon.** A transfer that outlives `send_to`'s
+# 55-second wire deadline answers `pending: true` and tells the caller to call again to resume —
+# while the first call's bytes are still arriving. Before #31 the second call appended into the
+# same `.part` alongside the first, and neither noticed the file passing the size that was
+# offered: measured here, 1,073,741,824 bytes offered and 1,078,657,024 on disk, renamed into the
+# inbox under the right name. Any daemon below this rev corrupts a resumed transfer.
+#
+# PR #30 adds `Hello::kind`, which is what lets Attacca tell a consumer connection apart from the
+# node it borrowed a credential from — the reason `zyrisd peers` used to knock this daemon offline.
 # scripts/check-zyris-pin.sh guards that both workspaces agree.
-zyris = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de", features = ["enroll"] }
-zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
-zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de", features = ["transfer-send", "transfer-listen"] }
+zyris = { git = "https://github.com/attacca-cc/zyris", rev = "509bb5f8beae40f572ff7374e29bb80a50b26be7", features = ["enroll"] }
+zyris-caps = { git = "https://github.com/attacca-cc/zyris", rev = "509bb5f8beae40f572ff7374e29bb80a50b26be7" }
+zyris-capkit = { git = "https://github.com/attacca-cc/zyris", rev = "509bb5f8beae40f572ff7374e29bb80a50b26be7", features = ["transfer-send", "transfer-listen"] }
 # Both are transfer's doing: the rendezvous client the send side asks where a peer is, and the
 # transport it dials over. Declared here with the others so the pin covers them too — a member
 # crate declaring one itself links zyris twice and earns "same type, different types".
-zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
-zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "542edda310fa2213469755ad6201193d6a9c03de" }
+zyris-attacca = { git = "https://github.com/attacca-cc/zyris", rev = "509bb5f8beae40f572ff7374e29bb80a50b26be7" }
+zyris-p2p = { git = "https://github.com/attacca-cc/zyris", rev = "509bb5f8beae40f572ff7374e29bb80a50b26be7" }
 zyrisd-node = { path = "crates/zyrisd-node" }
 zyrisd-display-proto = { path = "crates/zyrisd-display-proto" }
 
